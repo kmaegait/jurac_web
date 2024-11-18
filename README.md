@@ -1,46 +1,147 @@
-# Getting Started with Create React App
+# JURAC Webインターフェース
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+OpenAIのAPIを統合した、ファイル管理機能を備えたフルスタックWebアプリケーションです。
 
-## Available Scripts
+## 主な機能
 
-In the project directory, you can run:
+- AIアシスタントによるリアルタイムチャットインターフェース
+- ファイルのアップロードと管理システム
+- 画像のアップロードと処理
+- チャットメッセージのMarkdownレンダリング
+- トークン使用量の追跡
+- ダークモードUI
+- ファイルのダウンロード機能
+- 文脈理解を強化するベクターストアの統合
 
-### `npm start`
+## 必要条件
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+- Node.js (v14以降)
+- Python (3.10以降)
+- OpenAI APIキー
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## 環境変数
 
-### `npm test`
+ルートディレクトリに`.env`ファイルを作成し、以下の変数を設定してください：
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```
+OPENAI_API_KEY=your_openai_api_key
+ASSISTANT_ID=your_assistant_id (オプション)
+```
 
-### `npm run build`
+## インストール手順
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### バックエンド設定
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+1. Pythonの仮想環境を作成し、有効化します：
+```bash
+python -m venv venv
+source venv/bin/activate  # Windowsの場合: venv\Scripts\activate
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+2. Python依存パッケージのインストール：
+```bash
+pip install fastapi uvicorn python-dotenv openai aiofiles
+```
 
-### `npm run eject`
+### フロントエンド設定
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+1. Node.js依存パッケージのインストール：
+```bash
+npm install
+```
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## プロジェクト構造
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+```
+├── backend/
+│   └── main.py                 # FastAPIバックエンドサーバー
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx            # メインReactアプリケーション
+│   │   ├── index.tsx          # Reactエントリーポイント
+│   │   └── index.css          # グローバルスタイル
+│   └── setupProxy.js          # 開発用プロキシ設定
+└── README.md
+```
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## アプリケーションの実行
 
-## Learn More
+1. バックエンドサーバーの起動：
+```bash
+# ルートディレクトリから
+uvicorn main:app --reload --port 8000
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+2. フロントエンド開発サーバーの起動：
+```bash
+# フロントエンドディレクトリから
+npm start
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+アプリケーションは `http://localhost:3000` でアクセスできます。
+
+## APIエンドポイント
+
+### チャット
+- `POST /api/chat` - AIアシスタントにメッセージを送信
+
+### ファイル管理
+- `GET /api/files` - アップロードされたファイル一覧の取得
+- `POST /api/upload` - 新規ファイルのアップロード
+- `DELETE /api/files/{file_id}` - 特定のファイルの削除
+- `GET /api/files/{file_id}/download` - 特定のファイルのダウンロード
+- `DELETE /api/files` - 全ファイルの削除
+
+### システム
+- `GET /api/system-info` - システム情報の取得
+- `POST /api/initialize-assistant` - AIアシスタントの初期化
+- `GET /api/check-assistant` - アシスタントの状態確認
+- `GET /api/vector-stores` - ベクターストアの一覧取得
+
+### 画像処理
+- `POST /api/upload-image` - チャット用画像のアップロード
+
+## 使用技術
+
+### バックエンド
+- FastAPI
+- OpenAI API
+- Python-dotenv
+- Uvicorn
+- Aiofiles
+
+### フロントエンド
+- React
+- TypeScript
+- Material-UI
+- React Markdown
+- HTTP Proxy Middleware
+
+## 開発メモ
+
+- OpenAIの最新APIを使用（ベクターストアとアシスタントを含む）
+- アップロードされたファイルはOpenAIシステムとベクターストアの両方に保存
+- チャットインターフェースはテキストと画像の入力に対応
+- アシスタントの応答ごとにトークン使用量を表示
+- メッセージ間で会話コンテキストを維持
+
+## エラーハンドリング
+
+以下の状況に対する包括的なエラーハンドリングを実装：
+- API通信の問題
+- ファイルのアップロード/ダウンロードの失敗
+- アシスタント初期化の問題
+- ベクターストアの操作
+
+## セキュリティ対策
+
+- バックエンドでCORSを設定
+- APIキーは環境変数で管理
+- ファイル操作は適切なエラーハンドリングを伴う安全な処理
+
+## 制限事項
+
+- 適切な権限を持つOpenAI APIキーが必要
+- 画像処理は対応フォーマットのみ（JPEG、PNG、GIF、WEBP）
+- ベクターストアの操作はOpenAIのサービス可用性に依存
+- Python 3.10以降が必要（古いバージョンでは動作しません）
