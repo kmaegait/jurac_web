@@ -557,110 +557,126 @@ function App() {
                       color: message.isUser ? 'primary.contrastText' : 'text.primary'
                     }}
                   >
-                    {message.text && (
-                      message.isUser ? (
-                        <Typography sx={{ whiteSpace: 'pre-wrap' }}>{message.text}</Typography>
-                      ) : (
-                        <ReactMarkdown
-                          components={{
-                            p: ({ children }) => (
-                              <Typography component="p" sx={{ mt: 1, mb: 1 }}>
-                                {children}
-                              </Typography>
-                            ),
-                            code: ({ inline, className, children }: CustomCodeProps) => {
-                              const match = /language-(\w+)/.exec(className || '');
-                              return !inline ? (
-                                <Box
-                                  component="pre"
-                                  sx={{
-                                    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-                                    p: 2,
-                                    borderRadius: 1,
-                                    overflow: 'auto',
-                                    '& code': {
-                                      fontFamily: 'monospace'
-                                    }
-                                  }}
-                                >
-                                  <code className={className}>
-                                    {children}
-                                  </code>
-                                </Box>
-                              ) : (
+                    {message.text && !message.isUser ? (
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => (
+                            <Typography 
+                              component="div"
+                              sx={{ 
+                                mt: 1, 
+                                mb: 1,
+                                whiteSpace: 'pre-wrap'
+                              }}
+                            >
+                              {children}
+                            </Typography>
+                          ),
+                          code: ({ inline, className, children }: CustomCodeProps) => {
+                            const match = /language-(\w+)/.exec(className || '');
+                            return !inline ? (
+                              <Box
+                                component="pre"
+                                sx={{
+                                  backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                                  p: 2,
+                                  borderRadius: 1,
+                                  overflow: 'auto',
+                                  '& code': {
+                                    fontFamily: 'monospace'
+                                  }
+                                }}
+                              >
                                 <code className={className}>
                                   {children}
                                 </code>
-                              );
-                            },
-                            h1: ({ children }) => (
-                              <Typography variant="h4" component="h1" sx={{ mt: 2, mb: 1 }}>
-                                {children}
-                              </Typography>
-                            ),
-                            h2: ({ children }) => (
-                              <Typography variant="h5" component="h2" sx={{ mt: 2, mb: 1 }}>
-                                {children}
-                              </Typography>
-                            ),
-                            h3: ({ children }) => (
-                              <Typography variant="h6" component="h3" sx={{ mt: 2, mb: 1 }}>
-                                {children}
-                              </Typography>
-                            ),
-                            ul: ({ children }) => (
-                              <Box component="ul" sx={{ mt: 1, mb: 1, pl: 3 }}>
-                                {children}
                               </Box>
-                            ),
-                            ol: ({ children }) => (
-                              <Box component="ol" sx={{ mt: 1, mb: 1, pl: 3 }}>
+                            ) : (
+                              <code className={className}>
                                 {children}
-                              </Box>
-                            ),
-                            li: ({ children }) => (
-                              <Box component="li" sx={{ mt: 0.5 }}>
-                                <Typography component="span">{children}</Typography>
-                              </Box>
-                            ),
-                            blockquote: ({ children }) => (
+                              </code>
+                            );
+                          },
+                          h1: ({ children }) => (
+                            <Typography variant="h4" component="h1" sx={{ mt: 2, mb: 1 }}>
+                              {children}
+                            </Typography>
+                          ),
+                          h2: ({ children }) => (
+                            <Typography variant="h5" component="h2" sx={{ mt: 2, mb: 1 }}>
+                              {children}
+                            </Typography>
+                          ),
+                          h3: ({ children }) => (
+                            <Typography variant="h6" component="h3" sx={{ mt: 2, mb: 1 }}>
+                              {children}
+                            </Typography>
+                          ),
+                          ul: ({ children }) => (
+                            <Box component="ul" sx={{ mt: 1, mb: 1, pl: 3 }}>
+                              {children}
+                            </Box>
+                          ),
+                          ol: ({ children }) => (
+                            <Box component="ol" sx={{ mt: 1, mb: 1, pl: 3 }}>
+                              {children}
+                            </Box>
+                          ),
+                          li: ({ children }) => (
+                            <Box component="li" sx={{ mt: 0.5 }}>
+                              <Typography component="span">{children}</Typography>
+                            </Box>
+                          ),
+                          blockquote: ({ children }) => (
+                            <Box
+                              component="blockquote"
+                              sx={{
+                                borderLeft: 4,
+                                borderColor: 'primary.main',
+                                pl: 2,
+                                py: 1,
+                                my: 1,
+                                bgcolor: 'rgba(0, 0, 0, 0.1)',
+                                borderRadius: 1
+                              }}
+                            >
+                              {children}
+                            </Box>
+                          ),
+                        }}
+                      >
+                        {message.text}
+                      </ReactMarkdown>
+                    ) : (
+                      <>
+                        {message.images && message.images.length > 0 && (
+                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: message.text ? 2 : 0 }}>
+                            {message.images.map((image, imgIndex) => (
                               <Box
-                                component="blockquote"
+                                key={imgIndex}
+                                component="img"
+                                src={image}
                                 sx={{
-                                  borderLeft: 4,
-                                  borderColor: 'primary.main',
-                                  pl: 2,
-                                  py: 1,
-                                  my: 1,
-                                  bgcolor: 'rgba(0, 0, 0, 0.1)',
+                                  maxWidth: '200px',
+                                  maxHeight: '200px',
+                                  objectFit: 'contain',
                                   borderRadius: 1
                                 }}
-                              >
-                                {children}
-                              </Box>
-                            ),
-                          }}
-                        >
-                          {message.text}
-                        </ReactMarkdown>
-                      )
-                    )}
-                    {message.images && message.images.length > 0 && (
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                        {message.images.map((image, imgIndex) => (
-                          <Box
-                            key={imgIndex}
-                            component="img"
-                            src={image}
-                            sx={{
-                              maxWidth: '200px',
-                              maxHeight: '200px',
-                              objectFit: 'contain',
-                              borderRadius: 1
+                              />
+                            ))}
+                          </Box>
+                        )}
+                        {message.text && (
+                          <Typography 
+                            sx={{ 
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word'
                             }}
-                          />
-                        ))}
-                      </Box>
+                          >
+                            {message.text}
+                          </Typography>
+                        )}
+                      </>
                     )}
                     {message.files && message.files.length > 0 && (
                       <Box sx={{ mt: 1 }}>
@@ -715,27 +731,45 @@ function App() {
             
             {selectedImages.length > 0 && (
               <Box sx={{ 
-                display: 'flex', 
-                gap: 1, 
-                p: 2, 
-                flexWrap: 'wrap',
+                display: 'flex',
+                flexDirection: 'column',  // 縦方向のレイアウトに変更
+                gap: 2,
+                p: 2,
                 borderTop: 1,
                 borderColor: 'divider',
                 mb: 2
               }}>
-                {selectedImages.map((image, index) => (
-                  <Box
-                    key={index}
-                    component="img"
-                    src={image}
-                    sx={{
-                      width: 100,
-                      height: 100,
-                      objectFit: 'cover',
-                      borderRadius: 1
+                <Box sx={{ 
+                  display: 'flex', 
+                  gap: 1, 
+                  flexWrap: 'wrap',
+                }}>
+                  {selectedImages.map((image, index) => (
+                    <Box
+                      key={index}
+                      component="img"
+                      src={image}
+                      sx={{
+                        width: 100,
+                        height: 100,
+                        objectFit: 'cover',
+                        borderRadius: 1
+                      }}
+                    />
+                  ))}
+                </Box>
+                {/* 画像が選択されている場合のテキスト入力を追加 */}
+                {input && (
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      px: 1,
+                      color: 'text.secondary'
                     }}
-                  />
-                ))}
+                  >
+                    {input}
+                  </Typography>
+                )}
               </Box>
             )}
 
