@@ -10,6 +10,7 @@ import logging
 import uvicorn
 import aiofiles
 import base64
+from datetime import datetime
 
 load_dotenv()
 
@@ -35,9 +36,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from typing import Optional, List
+from pydantic import BaseModel
+
 class Message(BaseModel):
     text: str = ""
-    content: list | None = None
+    content: Optional[List] = None  # 型ヒントを修正
 
 class Assistant:
     def __init__(self):
@@ -289,7 +293,83 @@ async def chat(message: Message):
     try:
         logger.info(f"Received message: {message.text}")
         
-        # スレッドが初期化されていない場合は初期化
+        # /asst コマンドの処理を追加
+        if message.text and message.text.strip() == '/asst':
+            try:
+                # アシスタントIDが設定されていない場合は初期化
+                if not assistant.assistant_id:
+                    await assistant.initialize()
+                
+                logger.info(f"Retrieving assistant info for ID: {assistant.assistant_id}")
+                assistant_info = await client.beta.assistants.retrieve(assistant.assistant_id)
+                info_text = (
+                    f"Assistant Information:\n\n"
+                    f"ID: {assistant_info.id}\n"
+                    f"Name: {assistant_info.name}\n"
+                    f"Model: {assistant_info.model}\n"
+                    f"Created: {datetime.fromtimestamp(assistant_info.created_at).strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"Instructions: {assistant_info.instructions}\n\n"
+                    f"Tools: {', '.join(tool.type for tool in assistant_info.tools)}"
+                )
+                return {
+                    "text": info_text,
+                    "token_usage": {
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0
+                    }
+                }
+            except Exception as e:
+                logger.error(f"Error retrieving assistant info: {str(e)}")
+                return {
+                    "text": f"Error retrieving assistant information: {str(e)}",
+                    "token_usage": {
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0
+                    }
+                }
+        
+        # message.content 内の /asst コマンドの処理を追加
+        if message.content:
+            for item in message.content:
+                if item.get("type") == "text" and item.get("text").strip() == '/asst':
+                    try:
+                        # アシスタントIDが設定されていない場合は初期化
+                        if not assistant.assistant_id:
+                            await assistant.initialize()
+                        
+                        logger.info(f"Retrieving assistant info for ID: {assistant.assistant_id}")
+                        assistant_info = await client.beta.assistants.retrieve(assistant.assistant_id)
+                        info_text = (
+                            f"Assistant Information:\n\n"
+                            f"ID: {assistant_info.id}\n"
+                            f"Name: {assistant_info.name}\n"
+                            f"Model: {assistant_info.model}\n"
+                            f"Created: {datetime.fromtimestamp(assistant_info.created_at).strftime('%Y-%m-%d %H:%M:%S')}\n"
+                            f"Instructions: {assistant_info.instructions}\n\n"
+                            f"Tools: {', '.join(tool.type for tool in assistant_info.tools)}"
+                        )
+                        return {
+                            "text": info_text,
+                            "token_usage": {
+                                "prompt_tokens": 0,
+                                "completion_tokens": 0,
+                                "total_tokens": 0
+                            }
+                        }
+                    except Exception as e:
+                        logger.error(f"Error retrieving assistant info: {str(e)}")
+                        return {
+                            "text": f"Error retrieving assistant information: {str(e)}",
+                            "token_usage": {
+                                "prompt_tokens": 0,
+                                "completion_tokens": 0,
+                                "total_tokens": 0
+                            }
+                        }
+
+        # 既存のチャット処理を続行
         if not assistant.conversation_thread:
             await assistant.initialize()
 
