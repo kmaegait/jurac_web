@@ -448,7 +448,13 @@ async def chat(message: Message):
                 elif content_item.type == 'image_file':
                     file_ids_to_download.append(content_item.image_file.file_id)
 
-            # 生成されたファイルをダウンロードして保存
+            # 実行ステップを取得
+            run_steps = await client.beta.threads.runs.steps.list(
+                thread_id=assistant.conversation_thread,
+                run_id=run.id
+            )
+
+            # ダウンロードされたファイル情報を処理
             downloaded_files = []
             for file_id in file_ids_to_download:
                 try:
@@ -475,7 +481,8 @@ async def chat(message: Message):
             return {
                 "text": full_response,
                 "token_usage": completed_run.usage,
-                "files": downloaded_files
+                "files": downloaded_files,
+                "run_steps": run_steps.data  # 実行ステップを追加
             }
 
     except Exception as e:

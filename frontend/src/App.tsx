@@ -3,7 +3,6 @@ import {
   ThemeProvider, 
   createTheme, 
   CssBaseline,
-  Container,
   Paper,
   Box,
   TextField,
@@ -12,14 +11,13 @@ import {
   ListItem,
   Typography,
   CircularProgress,
-  Drawer,
-  List as MuiList,
-  ListItem as MuiListItem,
   ListItemText,
   Divider,
-  ListItemSecondaryAction,
   Button,
-  Input,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import { 
   Send as SendIcon,
@@ -28,7 +26,7 @@ import {
   ImageOutlined as ImageIcon,
   Download as DownloadIcon,
 } from '@mui/icons-material';
-import ReactMarkdown, { Components } from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
 
 const darkTheme = createTheme({
   palette: {
@@ -36,35 +34,11 @@ const darkTheme = createTheme({
   },
 });
 
-interface TokenUsage {
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-}
-
-interface Message {
-  text: string;
-  isUser: boolean;
-  tokenUsage?: TokenUsage;
-  images?: string[];
-  files?: Array<{
-    file_id: string;
-    filename: string;
-    path: string;
-  }>;
-}
-
+// FileInfoインターフェースを追加
 interface FileInfo {
   file_id: string;
   filename: string;
-  id: string;
-}
-
-// 初期化関連の型定義
-interface VectorStore {
-  id: string;
-  name: string;
-  created_at: number;
+  path: string;
 }
 
 // 手動でCodePropsの型を定義
@@ -72,6 +46,29 @@ interface CustomCodeProps {
   inline?: boolean;
   className?: string;
   children?: React.ReactNode;
+}
+
+// ImageDetailLevel型を追加
+type ImageDetailLevel = 'low' | 'high' | 'auto';
+
+// インターフェースの定義を追加
+interface RunStep {
+  type: string;
+  step_details: {
+    tool_calls?: Array<{
+      type: string;
+      code_interpreter?: {
+        input: string;
+        outputs: Array<{
+          type: string;
+          logs?: string;
+          image?: {
+            file_id: string;
+          };
+        }>;
+      };
+    }>;
+  };
 }
 
 function App() {
@@ -89,19 +86,21 @@ function App() {
       filename: string;
       path: string;
     }>;
+    runSteps?: RunStep[];  // 追加
   }>>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [files, setFiles] = useState<FileInfo[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [assistantId, setAssistantId] = useState<string>('');
   const [vectorStoreId, setVectorStoreId] = useState<string>('');
-  const drawerWidth = 240;
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [initializationStatus, setInitializationStatus] = useState<string>('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imageDetailLevel, setImageDetailLevel] = useState<ImageDetailLevel>('auto');
+  const [isDragging, setIsDragging] = useState(false);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // システム情報を取得する関数を追加
   const fetchSystemInfo = async () => {
@@ -161,15 +160,12 @@ function App() {
         // 画像をOpenAIにアップロードし、URLを取得
         const uploadedImageUrls = await Promise.all(
             selectedImages.map(async (base64Image) => {
-                // Base64データからBlobを作成
                 const response = await fetch(base64Image);
                 const blob = await response.blob();
                 
-                // FormDataを作成
                 const formData = new FormData();
                 formData.append('file', blob, 'image.png');
                 
-                // 画像をアップロード
                 const uploadResponse = await fetch('/api/upload-image', {
                     method: 'POST',
                     body: formData,
@@ -191,7 +187,6 @@ function App() {
         }]);
         setInput('');
         
-        // メッセージのコンテンツを構築
         const content: any[] = [];
         if (currentInput) {
             content.push({
@@ -200,13 +195,13 @@ function App() {
             });
         }
         
-        // アップロードされた画像URLを使用
+        // アップロードされた画像URLにdetailレベルを設定
         uploadedImageUrls.forEach(url => {
             content.push({
                 type: "image_url",
                 image_url: {
                     url: url,
-                    detail: "auto"
+                    detail: imageDetailLevel  // detailレベルを設定
                 }
             });
         });
@@ -222,7 +217,8 @@ function App() {
             setMessages(prev => [...prev, { 
                 text: data.text, 
                 isUser: false, 
-                tokenUsage: data.token_usage 
+                tokenUsage: data.token_usage,
+                runSteps: data.run_steps  // 追加
             }]);
         }
     } catch (error) {
@@ -275,7 +271,7 @@ function App() {
     }
   }
 
-  // useEffectを修正して、メッセージや画像が追加された後にスクロールを確実に行う
+  // useEffectを修正して、メッセージや画像が追加さた後にスクロールを確実に行う
   useEffect(() => {
     const scrollToBottom = () => {
       if (messagesEndRef.current) {
@@ -283,7 +279,7 @@ function App() {
       }
     };
 
-    // 画像の読み込みが完了した後にスクロールを行う
+    // 画像の読み込みが完了した後にスクロールを行
     const images = document.querySelectorAll('img');
     let imagesLoaded = 0;
 
@@ -300,7 +296,7 @@ function App() {
       }
     });
 
-    // 画像がない場合は即座にスクロール
+    // 画ない場合は即座にスクロール
     if (images.length === 0 || imagesLoaded === images.length) {
       scrollToBottom();
     }
@@ -317,6 +313,7 @@ function App() {
 
       if (existingAssistantData.assistant_id) {
         setAssistantId(existingAssistantData.assistant_id);
+        setInitializationStatus('Using existing assistant');
         setIsLoading(false);
         return;
       }
@@ -334,6 +331,8 @@ function App() {
       if (data.vector_stores && data.vector_stores.length > 0) {
         setVectorStoreId(data.vector_stores[0].id);
         setInitializationStatus('Using existing vector store...');
+      } else {
+        throw new Error('No vector stores available');
       }
 
       setInitializationStatus('Initializing new assistant...');
@@ -358,7 +357,9 @@ function App() {
 
     } catch (error) {
       console.error('Initialization error:', error);
-      setInitializationStatus('Initialization failed');
+      setInitializationStatus(
+        `Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -369,21 +370,77 @@ function App() {
     initializeAssistant();
   }, []);
 
-  // 画像選択ハンドラーを追加
+  // ドラッグ&ドロップハンドラーを修正
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // ドロップゾーンの直接の子要素からのイベントのみを処理
+    if (e.target === dropZoneRef.current || dropZoneRef.current?.contains(e.target as Node)) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // マウスがドロップゾーンから実際に出た時のみ状態を更新
+    if (e.target === dropZoneRef.current) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // ドラッグオーバー中は常にドラッグ状態を維持
+    if (!isDragging && (e.target === dropZoneRef.current || dropZoneRef.current?.contains(e.target as Node))) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // ドロップゾーン内でのドロップのみを処理
+    if (e.target === dropZoneRef.current || dropZoneRef.current?.contains(e.target as Node)) {
+      setIsDragging(false);
+      const files = Array.from(e.dataTransfer.files);
+      await processImageFiles(files);
+    }
+  };
+
+  // 画像ファイル処理関数
+  const processImageFiles = async (files: File[]) => {
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    
+    if (imageFiles.length === 0) {
+      console.warn('No valid image files found');
+      return;
+    }
+
+    const newImages = await Promise.all(
+      imageFiles.map(file => {
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+        });
+      })
+    );
+
+    setSelectedImages(prev => [...prev, ...newImages]);
+  };
+
+  // クリックでの画像選択ハンドラーを修正
   const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files?.length) return;
-    
-    const newImages: string[] = [];
-    for (const file of Array.from(event.target.files)) {
-      const reader = new FileReader();
-      const imageDataUrl = await new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
-      newImages.push(imageDataUrl);
-    }
-    
-    setSelectedImages(prev => [...prev, ...newImages]);
+    await processImageFiles(Array.from(event.target.files));
     if (event.target.value) event.target.value = '';
   };
 
@@ -407,6 +464,11 @@ function App() {
     }
   };
 
+  // メッセージ更新後にフォーカスを設定するuseEffectを追加
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [messages]);
+
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
@@ -425,6 +487,11 @@ function App() {
         }}>
           <Box sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>System Info</Typography>
+            {initializationStatus && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Status: {initializationStatus}
+              </Typography>
+            )}
             <Box sx={{ mb: 3 }}>
               <Typography variant="subtitle2" color="text.secondary">Assistant ID:</Typography>
               <Typography variant="body2" sx={{ 
@@ -513,16 +580,28 @@ function App() {
           display: 'flex', 
           flexDirection: 'column', 
           height: '100vh',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          position: 'relative'
         }}>
-          <Paper sx={{ 
-            flexGrow: 1, 
-            display: 'flex', 
-            flexDirection: 'column', 
-            m: 2, 
-            p: 2,
-            overflow: 'hidden'
-          }}>
+          <Paper 
+            ref={dropZoneRef}
+            sx={{ 
+              flexGrow: 1, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              m: 2, 
+              p: 2,
+              overflow: 'hidden',
+              border: isDragging ? '2px dashed' : '1px solid',
+              borderColor: isDragging ? 'primary.main' : 'divider',
+              transition: 'all 0.2s ease',
+              backgroundColor: isDragging ? 'rgba(25, 118, 210, 0.08)' : 'background.paper',
+            }}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
             <List sx={{ 
               flexGrow: 1, 
               overflow: 'auto', 
@@ -558,95 +637,154 @@ function App() {
                     }}
                   >
                     {message.text && !message.isUser ? (
-                      <ReactMarkdown
-                        components={{
-                          p: ({ children }) => (
-                            <Typography 
-                              component="div"
-                              sx={{ 
-                                mt: 1, 
-                                mb: 1,
-                                whiteSpace: 'pre-wrap'
-                              }}
-                            >
-                              {children}
-                            </Typography>
-                          ),
-                          code: ({ inline, className, children }: CustomCodeProps) => {
-                            const match = /language-(\w+)/.exec(className || '');
-                            return !inline ? (
-                              <Box
-                                component="pre"
-                                sx={{
-                                  backgroundColor: 'rgba(0, 0, 0, 0.1)',
-                                  p: 2,
-                                  borderRadius: 1,
-                                  overflow: 'auto',
-                                  '& code': {
-                                    fontFamily: 'monospace'
-                                  }
+                      <>
+                        <ReactMarkdown
+                          components={{
+                            p: ({ children }) => (
+                              <Typography 
+                                component="div"
+                                sx={{ 
+                                  mt: 1, 
+                                  mb: 1,
+                                  whiteSpace: 'pre-wrap'
                                 }}
                               >
+                                {children}
+                              </Typography>
+                            ),
+                            code: ({ inline, className, children }: CustomCodeProps) => {
+                              const match = /language-(\w+)/.exec(className || '');
+                              return !inline ? (
+                                <Box
+                                  component="pre"
+                                  sx={{
+                                    backgroundColor: match ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                                    p: 2,
+                                    borderRadius: 1,
+                                    overflow: 'auto',
+                                    '& code': {
+                                      fontFamily: 'monospace'
+                                    }
+                                  }}
+                                >
+                                  <code className={className}>
+                                    {children}
+                                  </code>
+                                </Box>
+                              ) : (
                                 <code className={className}>
                                   {children}
                                 </code>
-                              </Box>
-                            ) : (
-                              <code className={className}>
+                              );
+                            },
+                            h1: ({ children }) => (
+                              <Typography variant="h4" component="h1" sx={{ mt: 2, mb: 1 }}>
                                 {children}
-                              </code>
-                            );
-                          },
-                          h1: ({ children }) => (
-                            <Typography variant="h4" component="h1" sx={{ mt: 2, mb: 1 }}>
-                              {children}
-                            </Typography>
-                          ),
-                          h2: ({ children }) => (
-                            <Typography variant="h5" component="h2" sx={{ mt: 2, mb: 1 }}>
-                              {children}
-                            </Typography>
-                          ),
-                          h3: ({ children }) => (
-                            <Typography variant="h6" component="h3" sx={{ mt: 2, mb: 1 }}>
-                              {children}
-                            </Typography>
-                          ),
-                          ul: ({ children }) => (
-                            <Box component="ul" sx={{ mt: 1, mb: 1, pl: 3 }}>
-                              {children}
-                            </Box>
-                          ),
-                          ol: ({ children }) => (
-                            <Box component="ol" sx={{ mt: 1, mb: 1, pl: 3 }}>
-                              {children}
-                            </Box>
-                          ),
-                          li: ({ children }) => (
-                            <Box component="li" sx={{ mt: 0.5 }}>
-                              <Typography component="span">{children}</Typography>
-                            </Box>
-                          ),
-                          blockquote: ({ children }) => (
-                            <Box
-                              component="blockquote"
-                              sx={{
-                                borderLeft: 4,
-                                borderColor: 'primary.main',
-                                pl: 2,
-                                py: 1,
-                                my: 1,
-                                bgcolor: 'rgba(0, 0, 0, 0.1)',
-                                borderRadius: 1
-                              }}
-                            >
-                              {children}
-                            </Box>
-                          ),
-                        }}
-                      >
-                        {message.text}
-                      </ReactMarkdown>
+                              </Typography>
+                            ),
+                            h2: ({ children }) => (
+                              <Typography variant="h5" component="h2" sx={{ mt: 2, mb: 1 }}>
+                                {children}
+                              </Typography>
+                            ),
+                            h3: ({ children }) => (
+                              <Typography variant="h6" component="h3" sx={{ mt: 2, mb: 1 }}>
+                                {children}
+                              </Typography>
+                            ),
+                            ul: ({ children }) => (
+                              <Box component="ul" sx={{ mt: 1, mb: 1, pl: 3 }}>
+                                {children}
+                              </Box>
+                            ),
+                            ol: ({ children }) => (
+                              <Box component="ol" sx={{ mt: 1, mb: 1, pl: 3 }}>
+                                {children}
+                              </Box>
+                            ),
+                            li: ({ children }) => (
+                              <Box component="li" sx={{ mt: 0.5 }}>
+                                <Typography component="span">{children}</Typography>
+                              </Box>
+                            ),
+                            blockquote: ({ children }) => (
+                              <Box
+                                component="blockquote"
+                                sx={{
+                                  borderLeft: 4,
+                                  borderColor: 'primary.main',
+                                  pl: 2,
+                                  py: 1,
+                                  my: 1,
+                                  bgcolor: 'rgba(0, 0, 0, 0.1)',
+                                  borderRadius: 1
+                                }}
+                              >
+                                {children}
+                              </Box>
+                            ),
+                          }}
+                        >
+                          {message.text}
+                        </ReactMarkdown>
+                        
+                        {/* コードインタプリタの実行結果を表示 */}
+                        {message.runSteps && message.runSteps.map((step, stepIndex) => {
+                          if (step.type === "tool_calls" && step.step_details.tool_calls) {
+                            return step.step_details.tool_calls.map((toolCall, toolIndex) => {
+                              if (toolCall.type === "code_interpreter" && toolCall.code_interpreter) {
+                                return (
+                                  <Box key={`${stepIndex}-${toolIndex}`} sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                      Code Execution:
+                                    </Typography>
+                                    <Box
+                                      component="pre"
+                                      sx={{
+                                        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                                        p: 2,
+                                        borderRadius: 1,
+                                        overflow: 'auto',
+                                        '& code': {
+                                          fontFamily: 'monospace'
+                                        }
+                                      }}
+                                    >
+                                      <code>
+                                        {toolCall.code_interpreter.input}
+                                      </code>
+                                    </Box>
+                                    {toolCall.code_interpreter.outputs.map((output, outputIndex) => (
+                                      <Box key={outputIndex} sx={{ mt: 1 }}>
+                                        {output.logs && (
+                                          <Box
+                                            component="pre"
+                                            sx={{
+                                              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                                              p: 2,
+                                              borderRadius: 1,
+                                              overflow: 'auto',
+                                              '& code': {
+                                                fontFamily: 'monospace'
+                                              }
+                                            }}
+                                          >
+                                            <code>
+                                              {output.logs}
+                                            </code>
+                                          </Box>
+                                        )}
+                                      </Box>
+                                    ))}
+                                  </Box>
+                                );
+                              }
+                              return null;
+                            });
+                          }
+                          return null;
+                        })}
+                      </>
                     ) : (
                       <>
                         {message.images && message.images.length > 0 && (
@@ -729,56 +867,93 @@ function App() {
               <div ref={messagesEndRef} />
             </List>
             
+            {/* 選択された画像のプレビュー */}
             {selectedImages.length > 0 && (
               <Box sx={{ 
-                display: 'flex',
-                flexDirection: 'column',  // 縦方向のレイアウトに変更
-                gap: 2,
+                mb: 2,
                 p: 2,
-                borderTop: 1,
-                borderColor: 'divider',
-                mb: 2
+                borderRadius: 1,
+                bgcolor: 'background.default',
               }}>
                 <Box sx={{ 
-                  display: 'flex', 
-                  gap: 1, 
+                  display: 'flex',
+                  gap: 1,
                   flexWrap: 'wrap',
+                  mb: 2,
                 }}>
                   {selectedImages.map((image, index) => (
                     <Box
                       key={index}
-                      component="img"
-                      src={image}
                       sx={{
-                        width: 100,
-                        height: 100,
-                        objectFit: 'cover',
-                        borderRadius: 1
+                        position: 'relative',
+                        '&:hover .delete-button': {
+                          opacity: 1,
+                        },
                       }}
-                    />
+                    >
+                      <Box
+                        component="img"
+                        src={image}
+                        sx={{
+                          width: 100,
+                          height: 100,
+                          objectFit: 'cover',
+                          borderRadius: 1
+                        }}
+                      />
+                      <IconButton
+                        className="delete-button"
+                        size="small"
+                        sx={{
+                          position: 'absolute',
+                          top: -8,
+                          right: -8,
+                          opacity: 0,
+                          transition: 'opacity 0.2s ease',
+                          backgroundColor: 'background.paper',
+                          boxShadow: 1,
+                          '&:hover': {
+                            backgroundColor: 'action.hover',
+                          },
+                        }}
+                        onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== index))}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
                   ))}
                 </Box>
-                {/* 画像が選択されている場合のテキスト入力を追加 */}
-                {input && (
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      px: 1,
-                      color: 'text.secondary'
-                    }}
-                  >
-                    {input}
+                
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {selectedImages.length} image{selectedImages.length > 1 ? 's' : ''} selected
                   </Typography>
-                )}
+                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel id="detail-level-label">Detail Level</InputLabel>
+                    <Select
+                      labelId="detail-level-label"
+                      value={imageDetailLevel}
+                      label="Detail Level"
+                      onChange={(e) => setImageDetailLevel(e.target.value as ImageDetailLevel)}
+                    >
+                      <MenuItem value="low">Low</MenuItem>
+                      <MenuItem value="high">High</MenuItem>
+                      <MenuItem value="auto">Auto</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
               </Box>
             )}
 
+            {/* 入力エリア */}
             <Box sx={{ 
               display: 'flex', 
               gap: 1,
-              borderTop: selectedImages.length === 0 ? 1 : 0,
-              borderColor: 'divider',
-              pt: 2
+              mt: 'auto',
             }}>
               <TextField
                 inputRef={inputRef}
@@ -794,7 +969,7 @@ function App() {
                 multiline
                 maxRows={4}
                 disabled={isLoading}
-                autoFocus
+                placeholder={isDragging ? "Drop images here..." : (selectedImages.length > 0 ? "Add a message or press send" : "Type a message...")}
                 sx={{ 
                   '& .MuiInputBase-input': { 
                     color: isLoading ? 'text.secondary' : 'inherit'
@@ -815,6 +990,7 @@ function App() {
               />
               <IconButton
                 onClick={() => imageInputRef.current?.click()}
+                disabled={isLoading}
                 color={selectedImages.length > 0 ? "primary" : "default"}
               >
                 <ImageIcon />
