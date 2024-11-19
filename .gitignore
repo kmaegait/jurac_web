@@ -9,7 +9,7 @@ frontend/.env
 backend/venv/
 backend/__pycache__/
 backend/.env
-backend/downloads/*
+backend/downloaded_files/*
 
 # Dependencies
 node_modules/
