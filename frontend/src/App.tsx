@@ -101,6 +101,7 @@ function App() {
   const [imageDetailLevel, setImageDetailLevel] = useState<ImageDetailLevel>('auto');
   const [isDragging, setIsDragging] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // システム情報を取得する関数を追加
   const fetchSystemInfo = async () => {
@@ -236,6 +237,7 @@ function App() {
     formData.append('file', event.target.files[0]);
 
     try {
+      setIsUploading(true);  // アップロード開始
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
@@ -247,6 +249,8 @@ function App() {
       }
     } catch (error) {
       console.error('Error uploading file:', error);
+    } finally {
+      setIsUploading(false);  // アップロード完了
     }
   };
 
@@ -271,7 +275,7 @@ function App() {
     }
   }
 
-  // useEffectを修正して、メッセージや画像が追加さた後にスクロールを確実に行う
+  // useEffectを修正して、メッセージや画像が追加さた後にクロールを確実にう
   useEffect(() => {
     const scrollToBottom = () => {
       if (messagesEndRef.current) {
@@ -305,55 +309,22 @@ function App() {
   const initializeAssistant = async () => {
     try {
       setIsLoading(true);
-      setInitializationStatus('Checking existing assistant...');
+      setInitializationStatus('Initializing...');
 
-      // まず既存のアシスタントを確認
-      const existingAssistantResponse = await fetch('/api/check-assistant');
-      const existingAssistantData = await existingAssistantResponse.json();
-
-      if (existingAssistantData.assistant_id) {
-        setAssistantId(existingAssistantData.assistant_id);
-        setInitializationStatus('Using existing assistant');
-        setIsLoading(false);
-        return;
-      }
-
-      setInitializationStatus('Checking vector stores...');
-
-      // ベクターストアの一覧を取得
-      const response = await fetch('/api/vector-stores');
+      // システム情報を取得
+      const response = await fetch('/api/system-info');
       if (!response.ok) {
-        throw new Error('Failed to fetch vector stores');
+        throw new Error('Failed to fetch system info');
       }
       const data = await response.json();
       
-      // 既存のベクターストアを使用
-      if (data.vector_stores && data.vector_stores.length > 0) {
-        setVectorStoreId(data.vector_stores[0].id);
-        setInitializationStatus('Using existing vector store...');
+      if (data.assistant_id && data.vector_store_id) {
+        setAssistantId(data.assistant_id);
+        setVectorStoreId(data.vector_store_id);
+        setInitializationStatus('Initialization successful');
       } else {
-        throw new Error('No vector stores available');
-      }
-
-      setInitializationStatus('Initializing new assistant...');
-      const assistantResponse = await fetch('/api/initialize-assistant', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          vector_store_id: data.vector_stores[0].id,
-          model: "gpt-4o"
-        }),
-      });
-
-      if (!assistantResponse.ok) {
         throw new Error('Failed to initialize assistant');
       }
-
-      const assistantData = await assistantResponse.json();
-      setAssistantId(assistantData.assistant_id);
-      setInitializationStatus('Initialization complete');
 
     } catch (error) {
       console.error('Initialization error:', error);
@@ -488,7 +459,11 @@ function App() {
           <Box sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>System Info</Typography>
             {initializationStatus && (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography 
+                variant="body2" 
+                color={initializationStatus.includes('failed') ? 'error' : 'text.secondary'} 
+                sx={{ mb: 2 }}
+              >
                 Status: {initializationStatus}
               </Typography>
             )}
@@ -496,9 +471,9 @@ function App() {
               <Typography variant="subtitle2" color="text.secondary">Assistant ID:</Typography>
               <Typography variant="body2" sx={{ 
                 wordBreak: 'break-all',
-                color: assistantId ? 'text.primary' : 'text.disabled'
+                color: assistantId ? 'text.primary' : 'error.main'
               }}>
-                {assistantId || 'Loading...'}
+                {assistantId || 'Not initialized'}
               </Typography>
               
               <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
@@ -506,26 +481,46 @@ function App() {
               </Typography>
               <Typography variant="body2" sx={{ 
                 wordBreak: 'break-all',
-                color: vectorStoreId ? 'text.primary' : 'text.disabled'
+                color: vectorStoreId ? 'text.primary' : 'error.main'
               }}>
-                {vectorStoreId || 'Loading...'}
+                {vectorStoreId || 'Not initialized'}
               </Typography>
             </Box>
+            
+            {/* 再初期化ボタンを追加 */}
+            {(initializationStatus.includes('failed') || !assistantId) && (
+              <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={initializeAssistant}
+                disabled={isLoading}
+                fullWidth
+                sx={{ mb: 2 }}
+              >
+                Retry Initialization
+              </Button>
+            )}
 
             <Divider sx={{ my: 2 }} />
-            
+
             <Typography variant="h6" gutterBottom>Files</Typography>
             <Button
               variant="contained"
               component="label"
-              startIcon={<UploadFileIcon />}
+              startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <UploadFileIcon />}
               fullWidth
               sx={{ mb: 2 }}
+              disabled={isUploading}
             >
-              Upload File
-              <input type="file" hidden onChange={handleFileUpload} />
+              {isUploading ? 'Uploading...' : 'Upload File'}
+              <input 
+                type="file" 
+                hidden 
+                onChange={handleFileUpload}
+                disabled={isUploading}
+              />
             </Button>
-            
+
             {files.length > 0 ? (
               <List>
                 {files.map((file: FileInfo) => (
