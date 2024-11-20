@@ -27,6 +27,11 @@ import {
   Download as DownloadIcon,
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
+import { useChat } from './hooks/useChat';
+import { useFileManager } from './hooks/useFileManager';
+import { useSystemInfo } from './hooks/useSystemInfo';
+import { useScrollToBottom } from './hooks/useScrollToBottom';
+import { Message, FileInfo, ImageDetailLevel } from './types';
 
 const darkTheme = createTheme({
   palette: {
@@ -34,312 +39,70 @@ const darkTheme = createTheme({
   },
 });
 
-// FileInfoインターフェースを追加
-interface FileInfo {
-  file_id: string;
-  filename: string;
-  path: string;
-}
-
-// 手動でCodePropsの型を定義
+// CustomCodePropsの型定義を追加
 interface CustomCodeProps {
   inline?: boolean;
   className?: string;
   children?: React.ReactNode;
 }
 
-// ImageDetailLevel型を追加
-type ImageDetailLevel = 'low' | 'high' | 'auto';
-
-// インターフェースの定義を追加
-interface RunStep {
-  type: string;
-  step_details: {
-    tool_calls?: Array<{
-      type: string;
-      code_interpreter?: {
-        input: string;
-        outputs: Array<{
-          type: string;
-          logs?: string;
-          image?: {
-            file_id: string;
-          };
-        }>;
-      };
-    }>;
-  };
-}
-
 function App() {
-  const [messages, setMessages] = useState<Array<{
-    text: string;
-    isUser: boolean;
-    tokenUsage?: {
-      prompt_tokens: number;
-      completion_tokens: number;
-      total_tokens: number;
-    };
-    images?: string[];
-    files?: Array<{
-      file_id: string;
-      filename: string;
-      path: string;
-    }>;
-    runSteps?: RunStep[];  // 追加
-  }>>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [files, setFiles] = useState<FileInfo[]>([]);
+  const {
+    messages,
+    input,
+    setInput,
+    isLoading,
+    selectedImages,
+    setSelectedImages,
+    imageDetailLevel,
+    setImageDetailLevel,
+    sendMessage
+  } = useChat();
+
+  const {
+    files,
+    isUploading,
+    fetchFiles,
+    uploadFile,
+    deleteFile
+  } = useFileManager();
+
+  const {
+    assistantId,
+    vectorStoreId,
+    initializationStatus,
+    isInitializing,
+    initializeAssistant
+  } = useSystemInfo();
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [assistantId, setAssistantId] = useState<string>('');
-  const [vectorStoreId, setVectorStoreId] = useState<string>('');
-  const [initializationStatus, setInitializationStatus] = useState<string>('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const [imageDetailLevel, setImageDetailLevel] = useState<ImageDetailLevel>('auto');
-  const [isDragging, setIsDragging] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // システム情報を取得する関数を追加
-  const fetchSystemInfo = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('/api/system-info');
-      if (!response.ok) {
-        throw new Error('Failed to fetch system info');
-      }
-      const data = await response.json();
-      console.log('System info:', data);
-      setAssistantId(data.assistant_id);
-      setVectorStoreId(data.vector_store_id);
-    } catch (error) {
-      console.error('Error fetching system info:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ファイル一覧を取得する関数を定義
-  const fetchFiles = async () => {
-    try {
-      const response = await fetch('/api/files');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch files: ${response.statusText}`);
-      }
-      const data = await response.json();
-      console.log('Files API Response:', data);
-      
-      if (data.files && Array.isArray(data.files)) {
-        setFiles(data.files);
-      } else {
-        console.warn('Unexpected files data format:', data);
-        setFiles([]);
-      }
-    } catch (error) {
-      console.error('Error fetching files:', error);
-      setFiles([]);
-    }
+  // ファイルアップロードハンドラー
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files?.[0]) return;
+    await uploadFile(event.target.files[0]);
+    event.target.value = '';
   };
 
   // 初期化時にシステム情報とファイル一覧を取得
   useEffect(() => {
-    fetchSystemInfo();
-    fetchFiles();
-  }, []);
-
-  // メッセージ送信処理
-  const handleSend = async () => {
-    if ((!input.trim() && selectedImages.length === 0) || isLoading) return;
-    const currentInput = input.trim();
-    
-    try {
-        setIsLoading(true);
-        
-        // 画像をOpenAIにアップロードし、URLを取得
-        const uploadedImageUrls = await Promise.all(
-            selectedImages.map(async (base64Image) => {
-                const response = await fetch(base64Image);
-                const blob = await response.blob();
-                
-                const formData = new FormData();
-                formData.append('file', blob, 'image.png');
-                
-                const uploadResponse = await fetch('/api/upload-image', {
-                    method: 'POST',
-                    body: formData,
-                });
-                
-                if (!uploadResponse.ok) {
-                    throw new Error('Failed to upload image');
-                }
-                
-                const { url } = await uploadResponse.json();
-                return url;
-            })
-        );
-
-        setMessages(prev => [...prev, { 
-            text: currentInput, 
-            isUser: true,
-            images: selectedImages 
-        }]);
-        setInput('');
-        
-        const content: any[] = [];
-        if (currentInput) {
-            content.push({
-                type: "text",
-                text: currentInput
-            });
-        }
-        
-        // アップロードされた画像URLにdetailレベルを設定
-        uploadedImageUrls.forEach(url => {
-            content.push({
-                type: "image_url",
-                image_url: {
-                    url: url,
-                    detail: imageDetailLevel  // detailレベルを設定
-                }
-            });
-        });
-
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content }),
-        });
-        
-        const data = await response.json();
-        if (response.ok) {
-            setMessages(prev => [...prev, { 
-                text: data.text, 
-                isUser: false, 
-                tokenUsage: data.token_usage,
-                runSteps: data.run_steps  // 追加
-            }]);
-        }
-    } catch (error) {
-        console.error('Error sending message:', error);
-    } finally {
-        setIsLoading(false);
-        setSelectedImages([]); // 画像選択をリセット
-    }
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files?.[0]) return;
-    
-    const formData = new FormData();
-    formData.append('file', event.target.files[0]);
-
-    try {
-      setIsUploading(true);  // アップロード開始
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (response.ok) {
-        await fetchFiles();
-        event.target.value = '';
-      }
-    } catch (error) {
-      console.error('Error uploading file:', error);
-    } finally {
-      setIsUploading(false);  // アップロード完了
-    }
-  };
-
-  async function handleDeleteFile(fileId: string) {
-    try {
-      const response = await fetch(`/api/files/${fileId}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        console.log(`File with ID ${fileId} deleted successfully.`);
-        // ファイル一覧を更新
-        await fetchFiles();
-        // ファイル一覧の表示を更新
-        setFiles(prevFiles => prevFiles.filter(file => file.file_id !== fileId));
-      } else {
-        const errorData = await response.json();
-        console.error(`Failed to delete file with ID ${fileId}:`, errorData);
-      }
-    } catch (error) {
-      console.error('Error deleting file:', error);
-    }
-  }
-
-  // useEffectを修正して、メッセージや画像が追加さた後にクロールを確実にう
-  useEffect(() => {
-    const scrollToBottom = () => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      }
-    };
-
-    // 画像の読み込みが完了した後にスクロールを行
-    const images = document.querySelectorAll('img');
-    let imagesLoaded = 0;
-
-    images.forEach((img) => {
-      if (img.complete) {
-        imagesLoaded += 1;
-      } else {
-        img.onload = () => {
-          imagesLoaded += 1;
-          if (imagesLoaded === images.length) {
-            scrollToBottom();
-          }
-        };
-      }
-    });
-
-    // 画ない場合は即座にスクロール
-    if (images.length === 0 || imagesLoaded === images.length) {
-      scrollToBottom();
-    }
-  }, [messages, isLoading, selectedImages]); // selectedImagesを依存配列に追加
-
-  const initializeAssistant = async () => {
-    try {
-      setIsLoading(true);
-      setInitializationStatus('Initializing...');
-
-      // システム情報を取得
-      const response = await fetch('/api/system-info');
-      if (!response.ok) {
-        throw new Error('Failed to fetch system info');
-      }
-      const data = await response.json();
-      
-      if (data.assistant_id && data.vector_store_id) {
-        setAssistantId(data.assistant_id);
-        setVectorStoreId(data.vector_store_id);
-        setInitializationStatus('Initialization successful');
-      } else {
-        throw new Error('Failed to initialize assistant');
-      }
-
-    } catch (error) {
-      console.error('Initialization error:', error);
-      setInitializationStatus(
-        `Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // コンポーネントマウント時に初期化
-  useEffect(() => {
     initializeAssistant();
-  }, []);
+    fetchFiles();
+  }, [initializeAssistant, fetchFiles]);
+
+  // メッセージ送信ハンドラー
+  const handleSend = () => {
+    sendMessage();
+  };
+
+  // ファイル削除ハンドラー
+  const handleDeleteFile = async (fileId: string) => {
+    await deleteFile(fileId);
+  };
 
   // ドラッグ&ドロップハンドラーを修正
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
@@ -439,6 +202,9 @@ function App() {
   useEffect(() => {
     inputRef.current?.focus();
   }, [messages]);
+
+  // スクロール処理を追加
+  useScrollToBottom(messagesEndRef, [messages, isLoading, selectedImages]);
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -859,7 +625,7 @@ function App() {
                   </Paper>
                 </ListItem>
               )}
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} style={{ height: 0 }} />
             </List>
             
             {/* 選択された画像のプレビュー */}
