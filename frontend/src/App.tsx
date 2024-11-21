@@ -27,6 +27,7 @@ import {
   Download as DownloadIcon,
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useChat } from './hooks/useChat';
 import { useFileManager } from './hooks/useFileManager';
 import { useSystemInfo } from './hooks/useSystemInfo';
@@ -400,6 +401,7 @@ function App() {
                     {message.text && !message.isUser ? (
                       <>
                         <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
                           components={{
                             p: ({ children }) => (
                               <Typography 
