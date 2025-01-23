@@ -26,6 +26,9 @@ OpenAIのAPIを統合した、ファイル管理機能を備えたフルスタ�
 ```
 OPENAI_API_KEY=your_openai_api_key
 ASSISTANT_ID=your_assistant_id (オプション)
+AIKO_API_DOMAIN=your_aiko_api_domain
+AIKO_API_KEY=your_aiko_api_key
+AIKO_CONVERSATION_ID=your_aiko_conversation_id
 ```
 
 ## インストール手順
@@ -41,6 +44,7 @@ source venv/bin/activate  # Windowsの場合: venv\Scripts\activate
 2. Python依存パッケージのインストール：
 ```bash
 pip install fastapi uvicorn python-dotenv openai aiofiles
+pip install python-multipart requests
 ```
 
 ### フロントエンド設定

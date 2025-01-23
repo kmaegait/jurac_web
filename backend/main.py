@@ -1,3 +1,4 @@
+import json
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,8 @@ import uvicorn
 import aiofiles
 import base64
 from datetime import datetime
+from typing import Optional, List
+import requests
 
 load_dotenv()
 
@@ -23,7 +26,7 @@ client = AsyncOpenAI(api_key=api_key)
 
 # ロギングの設定を強化
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -36,8 +39,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from typing import Optional, List
-from pydantic import BaseModel
+
+AIKO_API_DOMAIN = os.getenv("AIKO_API_DOMAIN")
+AIKO_API_KEY = os.getenv("AIKO_API_KEY")
+AIKO_CONVERSATION_ID = os.getenv("AIKO_CONVERSATION_ID")
+
+def generate_aiko_message(query):
+    # TODO 一旦固定で作成済みのconversation_idを使用
+    # conversation_id毎に会話履歴を保持しているのでチャンネル毎に作成した方が良い
+    conversation_id = AIKO_CONVERSATION_ID
+    url = f'{AIKO_API_DOMAIN}/conversations/{conversation_id}/messages/sync'
+    body = json.dumps({ "message": query, "language_code": "ja" })
+
+    response = requests.post(
+        url,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {AIKO_API_KEY}"
+        },
+        data=body
+    )
+    try:
+        response.raise_for_status()
+    except RequestException as e:
+        logger.error(f"request failed. error=({e.response.text})")
+        return f"request failed. status: {response.status_code}"
+    data = response.json()
+    logger.info(data)
+    return data['answer']['response']['task_result']['content']
+
+
+def answer_using_securities_report(question: str) -> str:
+    return generate_aiko_message(question)
+
+
+def answer_management_strategy(question: str) -> str:
+    return generate_aiko_message(question)
+
 
 class Message(BaseModel):
     text: str = ""
@@ -95,7 +133,44 @@ class Assistant:
                         name="Assistant",
                         model=self.model,
                         instructions=self.instructions,
-                        tools=[{"type": "code_interpreter"}, {"type": "file_search"}],
+                        tools=[
+                            {"type": "code_interpreter"},
+                            {"type": "file_search"},
+                            {
+                                "type": "function",
+                                "function": {
+                                    "name": "answer_using_securities_report",
+                                    "description": "有価証券報告書についての回答を返す",
+                                    "parameters": {
+                                        "type": "object",
+                                        "properties": {
+                                            "question": {
+                                                "type": "string",
+                                                "description": "ユーザからの質問内容",
+                                            },
+                                        },
+                                        "required": ["question"],
+                                    },
+                                },
+                            },
+                            {
+                                "type": "function",
+                                "function": {
+                                    "name": "answer_management_strategy",
+                                    "description": "経営戦略についての回答を返す",
+                                    "parameters": {
+                                        "type": "object",
+                                        "properties": {
+                                            "question": {
+                                                "type": "string",
+                                                "description": "ユーザからの質問内容",
+                                            },
+                                        },
+                                        "required": ["question"],
+                                    },
+                                },
+                            },
+                        ],
                         tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
                     )
                     self.assistant_id = new_assistant.id
@@ -142,7 +217,8 @@ class Assistant:
             logger.debug(f"Starting run with assistant {self.assistant_id}")
             run = await client.beta.threads.runs.create(
                 thread_id=self.conversation_thread,
-                assistant_id=self.assistant_id
+                assistant_id=self.assistant_id,
+                tool_choice={"type": "function", "function": {"name": "answer_using_securities_report"}}
             )
 
             # 実行完了を待ち、usage情報を取得
@@ -176,11 +252,60 @@ class Assistant:
                 thread_id=thread_id,
                 run_id=run_id
             )
-            if run.status == 'completed':
+            logger.info("run status: %s", run.status)
+            if run.status in ['completed', 'requires_action']:
                 return run
             elif run.status in ['failed', 'cancelled', 'expired']:
                 raise Exception(f"Run failed with status: {run.status}")
             await asyncio.sleep(0.5)
+
+    async def generate_message(self, run_id, thread_id):
+        while True:
+            run = await self.poll_run(run_id, thread_id)
+            if run.status == 'completed':
+                return run
+
+            # Loop through each tool in the required action section
+            if run.status == 'requires_action' and run.required_action:
+                # Define the list to store tool outputs
+                tool_outputs = []
+
+                for tool in run.required_action.submit_tool_outputs.tool_calls:
+                    if tool.type != "function":
+                        logger.info("no function tool: %s", tool)
+                        continue
+
+                    if tool.function.name == "answer_using_securities_report":
+                        arg = json.loads(tool.function.arguments)
+                        logger.info("answer_using_securities_report. arg: %s", arg)
+                        answer = answer_using_securities_report(arg['question'])
+                        tool_outputs.append({
+                            "tool_call_id": tool.id,
+                            "output": answer,
+                        })
+                    elif tool.function.name == "answer_management_strategy":
+                        arg = json.loads(tool.function.arguments)
+                        logger.info("answer_management_strategy. arg: %s", arg)
+                        answer = answer_management_strategy(arg['question'])
+                        tool_outputs.append({
+                            "tool_call_id": tool.id,
+                            "output": answer,
+                        })
+
+                # Submit all tool outputs at once after collecting them in a list
+                if tool_outputs:
+                    try:
+                        _ = await client.beta.threads.runs.submit_tool_outputs_and_poll(
+                            thread_id=thread_id,
+                            run_id=run_id,
+                            tool_outputs=tool_outputs
+                        )
+                        logger.info("Tool outputs submitted successfully.")
+                    except Exception as e:
+                        logger.error("Failed to submit tool outputs: %s", e)
+                        raise
+                else:
+                    raise Exception("No tool outputs to submit.")
 
     async def upload_file_to_vector_store(self, content, filename):
         try:
@@ -292,14 +417,14 @@ assistant = Assistant()
 async def chat(message: Message):
     try:
         logger.info(f"Received message: {message.text}")
-        
+
         # /asst コマンドの処理を追加
         if message.text and message.text.strip() == '/asst':
             try:
                 # アシスタントIDが設定されていない場合は初期化
                 if not assistant.assistant_id:
                     await assistant.initialize()
-                
+
                 logger.info(f"Retrieving assistant info for ID: {assistant.assistant_id}")
                 assistant_info = await client.beta.assistants.retrieve(assistant.assistant_id)
                 info_text = (
@@ -329,7 +454,7 @@ async def chat(message: Message):
                         "total_tokens": 0
                     }
                 }
-        
+
         # message.content 内の /asst コマンドの処理を追加
         if message.content:
             for item in message.content:
@@ -338,7 +463,7 @@ async def chat(message: Message):
                         # アシスタントIDが設定されていない場合は初期化
                         if not assistant.assistant_id:
                             await assistant.initialize()
-                        
+
                         logger.info(f"Retrieving assistant info for ID: {assistant.assistant_id}")
                         assistant_info = await client.beta.assistants.retrieve(assistant.assistant_id)
                         info_text = (
@@ -385,22 +510,22 @@ async def chat(message: Message):
                     base64_data = base64_url.split(",")[1]
                     # バイナリデータに変換
                     image_data = base64.b64decode(base64_data)
-                    
+
                     # 一時ファイルとして保存
                     temp_file_path = f"temp_image_{len(content)}.png"
                     with open(temp_file_path, "wb") as f:
                         f.write(image_data)
-                    
+
                     # OpenAIにファイルをアップロード
                     with open(temp_file_path, "rb") as f:
                         file_response = await client.files.create(
                             file=f,
                             purpose="assistants"
                         )
-                    
+
                     # 一時ファイルを削除
                     os.remove(temp_file_path)
-                    
+
                     # ファイルURLを使用
                     content.append({
                         "type": "image_file",
@@ -412,7 +537,7 @@ async def chat(message: Message):
                     content.append(item)
         else:
             content = [{"type": "text", "text": message.text}]
-        
+
         # メッセージを作成
         await client.beta.threads.messages.create(
             thread_id=assistant.conversation_thread,
@@ -427,8 +552,8 @@ async def chat(message: Message):
             model="gpt-4o"  # Vision対応モデルからgpt-4oに変更
         )
 
-        completed_run = await assistant.poll_run(run.id, assistant.conversation_thread)
-        
+        completed_run = await assistant.generate_message(run.id, assistant.conversation_thread)
+
         messages = await client.beta.threads.messages.list(
             thread_id=assistant.conversation_thread
         )
@@ -437,7 +562,7 @@ async def chat(message: Message):
         if assistant_message:
             full_response = ""
             file_ids_to_download = []
-            
+
             for content_item in assistant_message.content:
                 if content_item.type == 'text':
                     full_response += content_item.text.value
@@ -460,16 +585,16 @@ async def chat(message: Message):
                 try:
                     file_metadata = await client.files.retrieve(file_id)
                     file_content = await client.files.content(file_id)
-                    
+
                     # ダウンロードディレクトリを作成
                     download_dir = "./downloaded_files"
                     os.makedirs(download_dir, exist_ok=True)
-                    
+
                     # ファイルを保存
                     file_path = os.path.join(download_dir, file_metadata.filename)
                     with open(file_path, "wb") as f:
                         f.write(file_content.content)
-                    
+
                     downloaded_files.append({
                         "file_id": file_id,
                         "filename": file_metadata.filename,
