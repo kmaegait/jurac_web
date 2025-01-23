@@ -217,7 +217,8 @@ class Assistant:
             logger.debug(f"Starting run with assistant {self.assistant_id}")
             run = await client.beta.threads.runs.create(
                 thread_id=self.conversation_thread,
-                assistant_id=self.assistant_id
+                assistant_id=self.assistant_id,
+                tool_choice={"type": "function", "function": {"name": "answer_using_securities_report"}}
             )
 
             # 実行完了を待ち、usage情報を取得
