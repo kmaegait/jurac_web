@@ -44,6 +44,40 @@ AIKO_API_DOMAIN = os.getenv("AIKO_API_DOMAIN")
 AIKO_API_KEY = os.getenv("AIKO_API_KEY")
 AIKO_CONVERSATION_ID = os.getenv("AIKO_CONVERSATION_ID")
 
+# グローバル定数の定義
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "call_dxa_factory",
+            "description": """
+決算短信や財務情報に関する質問に回答します。
+以下のような質問に対して使用します：
+- 決算短信の内容に関する質問
+- 財務情報（売上、利益、業績など）についての質問
+- 最新のデータが必要な場合の質問
+
+使用例：
+- 「今期の営業利益はいくらですか？」
+- 「純利益の前年比はどうですか？」
+- 「決算における業績の特徴は？」
+""",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "決算短信に関する具体的な質問内容",
+                    },
+                },
+                "required": ["question"],
+            },
+        },
+    },
+    {"type": "code_interpreter"},
+    {"type": "file_search"}
+]
+
 def generate_aiko_message(query):
     # TODO 一旦固定で作成済みのconversation_idを使用
     # conversation_id毎に会話履歴を保持しているのでチャンネル毎に作成した方が良い
@@ -131,38 +165,7 @@ class Assistant:
                     name="Assistant",
                     model=self.model,
                     instructions=self.instructions,
-                    tools=[
-                        {
-                            "type": "function",
-                            "function": {
-                                "name": "call_dxa_factory",
-                                "description": """
-決算短信や財務情報に関する質問に回答します。
-以下のような質問に対して使用します：
-- 決算短信の内容に関する質問
-- 財務情報（売上、利益、業績など）についての質問
-- 最新のデータが必要な場合の質問
-
-使用例：
-- 「今期の営業利益はいくらですか？」
-- 「純利益の前年比はどうですか？」
-- 「決算における業績の特徴は？」
-""",
-                                "parameters": {
-                                    "type": "object",
-                                    "properties": {
-                                        "question": {
-                                            "type": "string",
-                                            "description": "決算短信に関する具体的な質問内容",
-                                        },
-                                    },
-                                    "required": ["question"],
-                                },
-                            },
-                        },
-                        {"type": "code_interpreter"},
-                        {"type": "file_search"}
-                    ],
+                    tools=TOOLS,
                     tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
                 )
                 self.assistant_id = new_assistant.id
@@ -388,38 +391,7 @@ class Assistant:
                         name="Assistant",
                         model=self.model,
                         instructions=self.instructions,
-                        tools=[
-                            {
-                                "type": "function",
-                                "function": {
-                                    "name": "call_dxa_factory",
-                                    "description": """
-決算短信や財務情報に関する質問に回答します。
-以下のような質問に対して使用します：
-- 決算短信の内容に関する質問
-- 財務情報（売上、利益、業績など）についての質問
-- 最新のデータが必要な場合の質問
-
-使用例：
-- 「今期の営業利益はいくらですか？」
-- 「純利益の前年比はどうですか？」
-- 「決算における業績の特徴は？」
-""",
-                                    "parameters": {
-                                        "type": "object",
-                                        "properties": {
-                                            "question": {
-                                                "type": "string",
-                                                "description": "決算短信に関する具体的な質問内容",
-                                            },
-                                        },
-                                        "required": ["question"],
-                                    },
-                                },
-                            },
-                            {"type": "code_interpreter"},
-                            {"type": "file_search"}
-                        ],
+                        tools=TOOLS,
                         tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
                     )
                     self.assistant_id = new_assistant.id
@@ -555,38 +527,7 @@ async def initialize_on_startup():
             name="Assistant",
             model="gpt-4o",
             instructions=assistant.instructions,
-            tools=[
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "call_dxa_factory",
-                        "description": """
-決算短信や財務情報に関する質問に回答します。
-以下のような質問に対して使用します：
-- 決算短信の内容に関する質問
-- 財務情報（売上、利益、業績など）についての質問
-- 最新のデータが必要な場合の質問
-
-使用例：
-- 「今期の営業利益はいくらですか？」
-- 「純利益の前年比はどうですか？」
-- 「決算における業績の特徴は？」
-""",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "question": {
-                                    "type": "string",
-                                    "description": "決算短信に関する具体的な質問内容",
-                                },
-                            },
-                            "required": ["question"],
-                        },
-                    },
-                },
-                {"type": "code_interpreter"},
-                {"type": "file_search"}
-            ],
+            tools=TOOLS,
             tool_resources={"file_search": {"vector_store_ids": [assistant.vector_store_id]}}
         )
         assistant.assistant_id = new_assistant.id
@@ -905,38 +846,7 @@ async def initialize_assistant(request: dict):
             name="Web Assistant",
             model=model,
             instructions=assistant.instructions,
-            tools=[
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "call_dxa_factory",
-                        "description": """
-決算短信や財務情報に関する質問に回答します。
-以下のような質問に対して使用します：
-- 決算短信の内容に関する質問
-- 財務情報（売上、利益、業績など）についての質問
-- 最新のデータが必要な場合の質問
-
-使用例：
-- 「今期の営業利益はいくらですか？」
-- 「純利益の前年比はどうですか？」
-- 「決算における業績の特徴は？」
-""",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "question": {
-                                    "type": "string",
-                                    "description": "決算短信に関する具体的な質問内容",
-                                },
-                            },
-                            "required": ["question"],
-                        },
-                    },
-                },
-                {"type": "code_interpreter"},
-                {"type": "file_search"}
-            ],
+            tools=TOOLS,
             tool_resources={"file_search": {"vector_store_ids": [vector_store_id]}}
         )
 
