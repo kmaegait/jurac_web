@@ -44,6 +44,40 @@ AIKO_API_DOMAIN = os.getenv("AIKO_API_DOMAIN")
 AIKO_API_KEY = os.getenv("AIKO_API_KEY")
 AIKO_CONVERSATION_ID = os.getenv("AIKO_CONVERSATION_ID")
 
+# グローバル定数の定義
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "call_dxa_factory",
+            "description": """
+決算短信や財務情報に関する質問に回答します。
+以下のような質問に対して使用します：
+- 決算短信の内容に関する質問
+- 財務情報（売上、利益、業績など）についての質問
+- 最新のデータが必要な場合の質問
+
+使用例：
+- 「今期の営業利益はいくらですか？」
+- 「純利益の前年比はどうですか？」
+- 「決算における業績の特徴は？」
+""",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "決算短信に関する具体的な質問内容",
+                    },
+                },
+                "required": ["question"],
+            },
+        },
+    },
+    {"type": "code_interpreter"},
+    {"type": "file_search"}
+]
+
 def generate_aiko_message(query):
     # TODO 一旦固定で作成済みのconversation_idを使用
     # conversation_id毎に会話履歴を保持しているのでチャンネル毎に作成した方が良い
@@ -69,11 +103,7 @@ def generate_aiko_message(query):
     return data['answer']['response']['task_result']['content']
 
 
-def answer_using_securities_report(question: str) -> str:
-    return generate_aiko_message(question)
-
-
-def answer_management_strategy(question: str) -> str:
+def call_dxa_factory(question: str) -> str:
     return generate_aiko_message(question)
 
 
@@ -84,14 +114,10 @@ class Message(BaseModel):
 class Assistant:
     def __init__(self):
         self.conversation_thread = None
-        self.assistant_id = self.load_assistant_id()
+        self.assistant_id = None
         self.model = "gpt-4o"
         self.instructions = self.read_instructions()
         self.vector_store_id = None
-
-    @staticmethod
-    def load_assistant_id():
-        return os.getenv("ASSISTANT_ID")
 
     @staticmethod
     def read_instructions():
@@ -118,63 +144,32 @@ class Assistant:
                     self.vector_store_id = vector_store.id
                     logger.info(f"New vector store created with ID: {self.vector_store_id}")
 
-            # 2. 既存のアシスタントを確認
+            # 2. アシスタントの設定
             if not self.assistant_id:
-                logger.debug("Checking existing assistants...")
-                assistants = await client.beta.assistants.list(limit=1)  # 最初の1件だけ取得
-                
-                if assistants.data:
-                    self.assistant_id = assistants.data[0].id
-                    logger.info(f"Using existing assistant: {self.assistant_id}")
-                else:
-                    # アシスタントが存在しない場合のみ新規作成
-                    logger.debug("No existing assistant found. Creating new assistant...")
-                    new_assistant = await client.beta.assistants.create(
-                        name="Assistant",
-                        model=self.model,
-                        instructions=self.instructions,
-                        tools=[
-                            {"type": "code_interpreter"},
-                            {"type": "file_search"},
-                            {
-                                "type": "function",
-                                "function": {
-                                    "name": "answer_using_securities_report",
-                                    "description": "有価証券報告書についての回答を返す",
-                                    "parameters": {
-                                        "type": "object",
-                                        "properties": {
-                                            "question": {
-                                                "type": "string",
-                                                "description": "ユーザからの質問内容",
-                                            },
-                                        },
-                                        "required": ["question"],
-                                    },
-                                },
-                            },
-                            {
-                                "type": "function",
-                                "function": {
-                                    "name": "answer_management_strategy",
-                                    "description": "経営戦略についての回答を返す",
-                                    "parameters": {
-                                        "type": "object",
-                                        "properties": {
-                                            "question": {
-                                                "type": "string",
-                                                "description": "ユーザからの質問内容",
-                                            },
-                                        },
-                                        "required": ["question"],
-                                    },
-                                },
-                            },
-                        ],
-                        tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
-                    )
-                    self.assistant_id = new_assistant.id
-                    logger.info(f"Created new assistant with ID: {self.assistant_id}")
+                # 環境変数からアシスタントIDを取得
+                env_assistant_id = os.getenv("ASSISTANT_ID")
+                if env_assistant_id:
+                    try:
+                        # 環境変数のアシスタントIDが有効か確認
+                        existing_assistant = await client.beta.assistants.retrieve(env_assistant_id)
+                        self.assistant_id = existing_assistant.id
+                        logger.info(f"Using assistant from environment variable: {self.assistant_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to retrieve assistant from environment variable: {str(e)}")
+                        self.assistant_id = None
+
+            # アシスタントIDがない場合は新規作成
+            if not self.assistant_id:
+                logger.info("Creating new assistant...")
+                new_assistant = await client.beta.assistants.create(
+                    name="Assistant",
+                    model=self.model,
+                    instructions=self.instructions,
+                    tools=TOOLS,
+                    tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
+                )
+                self.assistant_id = new_assistant.id
+                logger.info(f"Created new assistant with ID: {self.assistant_id}")
 
             # 3. 会話スレッドの作成
             if not self.conversation_thread:
@@ -199,26 +194,12 @@ class Assistant:
                 content=message
             )
 
-            # アシスタントの設定を確認し、必要に応じて更新
-            try:
-                assistant_info = await client.beta.assistants.retrieve(self.assistant_id)
-                current_vector_store_ids = assistant_info.tool_resources.get('file_search', {}).get('vector_store_ids', [])
-                
-                if self.vector_store_id not in current_vector_store_ids:
-                    logger.info(f"Updating assistant with vector store ID: {self.vector_store_id}")
-                    await client.beta.assistants.update(
-                        assistant_id=self.assistant_id,
-                        tools=[{"type": "code_interpreter"}, {"type": "file_search"}],
-                        tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
-                    )
-            except Exception as e:
-                logger.error(f"Error checking/updating assistant configuration: {str(e)}")
-
             logger.debug(f"Starting run with assistant {self.assistant_id}")
             run = await client.beta.threads.runs.create(
                 thread_id=self.conversation_thread,
                 assistant_id=self.assistant_id,
-                tool_choice={"type": "function", "function": {"name": "answer_using_securities_report"}}
+                model="gpt-4o",
+                tool_choice="auto"
             )
 
             # 実行完了を待ち、usage情報を取得
@@ -261,51 +242,106 @@ class Assistant:
 
     async def generate_message(self, run_id, thread_id):
         while True:
-            run = await self.poll_run(run_id, thread_id)
-            if run.status == 'completed':
-                return run
+            try:
+                run = await self.poll_run(run_id, thread_id)
+                logger.debug(f"Run status: {run.status}")
+                
+                if run.status == 'completed':
+                    return run
+                elif run.status in ['failed', 'cancelled', 'expired']:
+                    # 失敗した場合は実行をキャンセル
+                    await client.beta.threads.runs.cancel(
+                        thread_id=thread_id,
+                        run_id=run_id
+                    )
+                    raise Exception(f"Run failed with status: {run.status}")
 
-            # Loop through each tool in the required action section
-            if run.status == 'requires_action' and run.required_action:
-                # Define the list to store tool outputs
-                tool_outputs = []
+                # Loop through each tool in the required action section
+                if run.status == 'requires_action' and run.required_action:
+                    logger.info(f"Required action details: {json.dumps(run.required_action.model_dump(), indent=2)}")
+                    tool_outputs = []
 
-                for tool in run.required_action.submit_tool_outputs.tool_calls:
-                    if tool.type != "function":
-                        logger.info("no function tool: %s", tool)
-                        continue
-
-                    if tool.function.name == "answer_using_securities_report":
-                        arg = json.loads(tool.function.arguments)
-                        logger.info("answer_using_securities_report. arg: %s", arg)
-                        answer = answer_using_securities_report(arg['question'])
-                        tool_outputs.append({
-                            "tool_call_id": tool.id,
-                            "output": answer,
-                        })
-                    elif tool.function.name == "answer_management_strategy":
-                        arg = json.loads(tool.function.arguments)
-                        logger.info("answer_management_strategy. arg: %s", arg)
-                        answer = answer_management_strategy(arg['question'])
-                        tool_outputs.append({
-                            "tool_call_id": tool.id,
-                            "output": answer,
-                        })
-
-                # Submit all tool outputs at once after collecting them in a list
-                if tool_outputs:
-                    try:
-                        _ = await client.beta.threads.runs.submit_tool_outputs_and_poll(
+                    if not hasattr(run.required_action, 'submit_tool_outputs') or not run.required_action.submit_tool_outputs:
+                        logger.error("No submit_tool_outputs in required_action")
+                        await client.beta.threads.runs.cancel(
                             thread_id=thread_id,
-                            run_id=run_id,
-                            tool_outputs=tool_outputs
+                            run_id=run_id
                         )
-                        logger.info("Tool outputs submitted successfully.")
-                    except Exception as e:
-                        logger.error("Failed to submit tool outputs: %s", e)
-                        raise
-                else:
-                    raise Exception("No tool outputs to submit.")
+                        return run
+
+                    if not hasattr(run.required_action.submit_tool_outputs, 'tool_calls'):
+                        logger.error("No tool_calls in submit_tool_outputs")
+                        await client.beta.threads.runs.cancel(
+                            thread_id=thread_id,
+                            run_id=run_id
+                        )
+                        return run
+
+                    for tool in run.required_action.submit_tool_outputs.tool_calls:
+                        logger.info(f"Processing tool call: {json.dumps(tool.model_dump(), indent=2)}")
+                        
+                        if tool.type != "function":
+                            logger.info("no function tool: %s", tool)
+                            continue
+
+                        if tool.function.name == "call_dxa_factory":
+                            try:
+                                arg = json.loads(tool.function.arguments)
+                                logger.info("Processing securities report question: %s", arg['question'])
+                                answer = call_dxa_factory(arg['question'])
+                                if not answer:
+                                    logger.warning("No answer found in securities report")
+                                    answer = "申し訳ありません。該当する決算情報が見つかりませんでした。"
+                                logger.info("Securities report answer generated successfully")
+                                tool_outputs.append({
+                                    "tool_call_id": tool.id,
+                                    "output": answer,
+                                })
+                            except Exception as e:
+                                logger.error("Error processing securities report question: %s", str(e))
+                                tool_outputs.append({
+                                    "tool_call_id": tool.id,
+                                    "output": "決算情報の処理中にエラーが発生しました。",
+                                })
+
+                    # Submit tool outputs if any exist
+                    if tool_outputs:
+                        try:
+                            logger.info(f"Submitting tool outputs: {json.dumps(tool_outputs, indent=2)}")
+                            await client.beta.threads.runs.submit_tool_outputs(
+                                thread_id=thread_id,
+                                run_id=run_id,
+                                tool_outputs=tool_outputs
+                            )
+                            logger.info("Tool outputs submitted successfully.")
+                        except Exception as e:
+                            logger.error("Failed to submit tool outputs: %s", e)
+                            # 失敗した場合は実行をキャンセル
+                            await client.beta.threads.runs.cancel(
+                                thread_id=thread_id,
+                                run_id=run_id
+                            )
+                            raise
+                    else:
+                        logger.warning("No tool outputs generated")
+                        # ツール出力がない場合は実行をキャンセルして完了
+                        await client.beta.threads.runs.cancel(
+                            thread_id=thread_id,
+                            run_id=run_id
+                        )
+                        return run
+
+            except Exception as e:
+                logger.error(f"Error in generate_message: {str(e)}")
+                # エラーが発生した場合は実行をキャンセル
+                try:
+                    await client.beta.threads.runs.cancel(
+                        thread_id=thread_id,
+                        run_id=run_id
+                    )
+                except Exception as cancel_error:
+                    logger.error(f"Error cancelling run: {str(cancel_error)}")
+                raise
 
     async def upload_file_to_vector_store(self, content, filename):
         try:
@@ -317,6 +353,52 @@ class Assistant:
             logger.info(f"File uploaded to vector store: {filename}")
         except Exception as e:
             logger.error(f"Error uploading file to vector store: {str(e)}")
+            raise
+
+    async def initialize_for_asst(self):
+        """
+        /asstコマンド用の初期化メソッド。
+        スレッドは作成せず、アシスタントとベクターストアの初期化のみを行う。
+        """
+        try:
+            # 1. ベクターストアの確認と設定
+            if not self.vector_store_id:
+                logger.debug("Checking existing vector stores...")
+                vector_stores = await client.beta.vector_stores.list()
+                if vector_stores.data:
+                    self.vector_store_id = vector_stores.data[0].id
+                    logger.info(f"Reusing existing vector store: {self.vector_store_id}")
+                else:
+                    vector_store = await client.beta.vector_stores.create()
+                    self.vector_store_id = vector_store.id
+                    logger.info(f"New vector store created with ID: {self.vector_store_id}")
+
+            # 2. アシスタントの設定
+            if not self.assistant_id:
+                env_assistant_id = os.getenv("ASSISTANT_ID")
+                if env_assistant_id:
+                    try:
+                        existing_assistant = await client.beta.assistants.retrieve(env_assistant_id)
+                        self.assistant_id = existing_assistant.id
+                        logger.info(f"Using assistant from environment variable: {self.assistant_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to retrieve assistant from environment variable: {str(e)}")
+                        self.assistant_id = None
+
+                if not self.assistant_id:
+                    logger.info("Creating new assistant...")
+                    new_assistant = await client.beta.assistants.create(
+                        name="Assistant",
+                        model=self.model,
+                        instructions=self.instructions,
+                        tools=TOOLS,
+                        tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
+                    )
+                    self.assistant_id = new_assistant.id
+                    logger.info(f"Created new assistant with ID: {self.assistant_id}")
+
+        except Exception as e:
+            logger.error(f"Error during initialization for /asst: {str(e)}")
             raise
 
 class FileInfo(BaseModel):
@@ -411,19 +493,85 @@ async def delete_all_files():
         logger.error(f"Error deleting all files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# グローバルなアシスタントインスタンスを作成
 assistant = Assistant()
+
+# サーバー起動時の初期化関数
+async def initialize_on_startup():
+    try:
+        # 1. ベクターストアの初期化
+        if not assistant.vector_store_id:
+            logger.debug("Checking existing vector stores...")
+            vector_stores = await client.beta.vector_stores.list()
+            if vector_stores.data:
+                assistant.vector_store_id = vector_stores.data[0].id
+                logger.info(f"Reusing existing vector store: {assistant.vector_store_id}")
+            else:
+                vector_store = await client.beta.vector_stores.create()
+                assistant.vector_store_id = vector_store.id
+                logger.info(f"New vector store created with ID: {assistant.vector_store_id}")
+
+        # 2. 既存のアシスタントを削除
+        if assistant.assistant_id:
+            try:
+                await client.beta.assistants.delete(assistant.assistant_id)
+                logger.info(f"Deleted existing assistant: {assistant.assistant_id}")
+                assistant.assistant_id = None
+            except Exception as e:
+                logger.warning(f"Failed to delete assistant: {str(e)}")
+                assistant.assistant_id = None
+
+        # 3. 新しいアシスタントを作成
+        logger.info("Creating new assistant...")
+        new_assistant = await client.beta.assistants.create(
+            name="Assistant",
+            model="gpt-4o",
+            instructions=assistant.instructions,
+            tools=TOOLS,
+            tool_resources={"file_search": {"vector_store_ids": [assistant.vector_store_id]}}
+        )
+        assistant.assistant_id = new_assistant.id
+        logger.info(f"Created new assistant with ID: {assistant.assistant_id}")
+
+        # 4. 会話スレッドの作成
+        thread = await client.beta.threads.create()
+        assistant.conversation_thread = thread.id
+        logger.info(f"Thread created with ID: {assistant.conversation_thread}")
+
+        logger.info("Assistant initialization completed successfully")
+    except Exception as e:
+        logger.error(f"Error initializing assistant on startup: {str(e)}")
+        raise
+
+@app.on_event("startup")
+async def startup_event():
+    await initialize_on_startup()
 
 @app.post("/api/chat")
 async def chat(message: Message):
     try:
         logger.info(f"Received message: {message.text}")
+        logger.info(f"Message content: {message.content}")
 
-        # /asst コマンドの処理を追加
-        if message.text and message.text.strip() == '/asst':
+        # コマンドテキストの取得
+        command_text = ""
+        if message.text:
+            command_text = message.text.strip()
+        elif message.content:
+            for item in message.content:
+                if item.get("type") == "text":
+                    command_text = item.get("text", "").strip()
+                    break
+
+        # コマンドの検出と処理
+        command_lower = command_text.lower()
+        
+        # /asst コマンドの処理
+        if command_lower == '/asst':
+            logger.info("Processing /asst command")
             try:
-                # アシスタントIDが設定されていない場合は初期化
-                if not assistant.assistant_id:
-                    await assistant.initialize()
+                # アシスタントの情報のみを初期化
+                await assistant.initialize_for_asst()
 
                 logger.info(f"Retrieving assistant info for ID: {assistant.assistant_id}")
                 assistant_info = await client.beta.assistants.retrieve(assistant.assistant_id)
@@ -434,8 +582,10 @@ async def chat(message: Message):
                     f"Model: {assistant_info.model}\n"
                     f"Created: {datetime.fromtimestamp(assistant_info.created_at).strftime('%Y-%m-%d %H:%M:%S')}\n"
                     f"Instructions: {assistant_info.instructions}\n\n"
-                    f"Tools: {', '.join(tool.type for tool in assistant_info.tools)}"
+                    f"Tools: {', '.join(tool.type for tool in assistant_info.tools)}\n"
+                    f"Vector Store ID: {assistant.vector_store_id}"
                 )
+                logger.info("Successfully retrieved assistant info")
                 return {
                     "text": info_text,
                     "token_usage": {
@@ -445,9 +595,10 @@ async def chat(message: Message):
                     }
                 }
             except Exception as e:
-                logger.error(f"Error retrieving assistant info: {str(e)}")
+                error_msg = f"Error retrieving assistant information: {str(e)}"
+                logger.error(error_msg)
                 return {
-                    "text": f"Error retrieving assistant information: {str(e)}",
+                    "text": error_msg,
                     "token_usage": {
                         "prompt_tokens": 0,
                         "completion_tokens": 0,
@@ -455,53 +606,65 @@ async def chat(message: Message):
                     }
                 }
 
-        # message.content 内の /asst コマンドの処理を追加
-        if message.content:
-            for item in message.content:
-                if item.get("type") == "text" and item.get("text").strip() == '/asst':
-                    try:
-                        # アシスタントIDが設定されていない場合は初期化
-                        if not assistant.assistant_id:
-                            await assistant.initialize()
-
-                        logger.info(f"Retrieving assistant info for ID: {assistant.assistant_id}")
-                        assistant_info = await client.beta.assistants.retrieve(assistant.assistant_id)
-                        info_text = (
-                            f"Assistant Information:\n\n"
-                            f"ID: {assistant_info.id}\n"
-                            f"Name: {assistant_info.name}\n"
-                            f"Model: {assistant_info.model}\n"
-                            f"Created: {datetime.fromtimestamp(assistant_info.created_at).strftime('%Y-%m-%d %H:%M:%S')}\n"
-                            f"Instructions: {assistant_info.instructions}\n\n"
-                            f"Tools: {', '.join(tool.type for tool in assistant_info.tools)}"
-                        )
-                        return {
-                            "text": info_text,
-                            "token_usage": {
-                                "prompt_tokens": 0,
-                                "completion_tokens": 0,
-                                "total_tokens": 0
-                            }
+        # /inst コマンドの処理
+        if command_lower.startswith('/inst '):
+            logger.info("Processing /inst command")
+            try:
+                # 新しい指示内容を取得（/instの後のテキスト）
+                new_instructions = command_text[6:].strip()
+                if not new_instructions:
+                    return {
+                        "text": "Error: Instructions cannot be empty",
+                        "token_usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0
                         }
-                    except Exception as e:
-                        logger.error(f"Error retrieving assistant info: {str(e)}")
-                        return {
-                            "text": f"Error retrieving assistant information: {str(e)}",
-                            "token_usage": {
-                                "prompt_tokens": 0,
-                                "completion_tokens": 0,
-                                "total_tokens": 0
-                            }
-                        }
+                    }
 
-        # 既存のチャット処理を続行
+                # アシスタントの初期化（必要な場合）
+                if not assistant.assistant_id:
+                    await assistant.initialize_for_asst()
+
+                # アシスタントの更新
+                updated_assistant = await client.beta.assistants.update(
+                    assistant_id=assistant.assistant_id,
+                    instructions=new_instructions
+                )
+
+                info_text = (
+                    f"Instructions updated successfully!\n\n"
+                    f"New Instructions: {updated_assistant.instructions}"
+                )
+                logger.info("Successfully updated assistant instructions")
+                return {
+                    "text": info_text,
+                    "token_usage": {
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0
+                    }
+                }
+            except Exception as e:
+                error_msg = f"Error updating assistant instructions: {str(e)}"
+                logger.error(error_msg)
+                return {
+                    "text": error_msg,
+                    "token_usage": {
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0
+                    }
+                }
+
+        # 通常のチャット処理（コマンド以外の場合のみ実行）
         if not assistant.conversation_thread:
             await assistant.initialize()
 
-        # 画像URLを含むメッセージを作成
+        # メッセージコンテンツの準備
+        content = []
         if message.content:
-            # 画像URLを公開アクセス可能なURLに変換
-            content = []
+            # 画像URLを含むメッセージを作成
             for item in message.content:
                 if item.get("type") == "image_url":
                     # Base64データをOpenAIのファイルとしてアップロード
@@ -549,7 +712,8 @@ async def chat(message: Message):
         run = await client.beta.threads.runs.create(
             thread_id=assistant.conversation_thread,
             assistant_id=assistant.assistant_id,
-            model="gpt-4o"  # Vision対応モデルからgpt-4oに変更
+            model="gpt-4o",
+            tool_choice="auto"
         )
 
         completed_run = await assistant.generate_message(run.id, assistant.conversation_thread)
@@ -607,7 +771,7 @@ async def chat(message: Message):
                 "text": full_response,
                 "token_usage": completed_run.usage,
                 "files": downloaded_files,
-                "run_steps": run_steps.data  # 実行ステップを追加
+                "run_steps": run_steps.data
             }
 
     except Exception as e:
@@ -682,7 +846,7 @@ async def initialize_assistant(request: dict):
             name="Web Assistant",
             model=model,
             instructions=assistant.instructions,
-            tools=[{"type": "code_interpreter"}, {"type": "file_search"}],
+            tools=TOOLS,
             tool_resources={"file_search": {"vector_store_ids": [vector_store_id]}}
         )
 
