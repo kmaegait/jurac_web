@@ -57,7 +57,8 @@ function App() {
     setSelectedImages,
     imageDetailLevel,
     setImageDetailLevel,
-    sendMessage
+    sendMessage,
+    thinkingText
   } = useChat();
 
   const {
@@ -623,7 +624,7 @@ function App() {
                     }}
                   >
                     <CircularProgress size={20} />
-                    <Typography>Thinking...</Typography>
+                    <Typography>{thinkingText}</Typography>
                   </Paper>
                 </ListItem>
               )}
