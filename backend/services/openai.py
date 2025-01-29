@@ -146,15 +146,15 @@ class Assistant:
         try:
             logger.debug("Starting get_response...")
             await self.initialize()
-            
-            logger.debug(f"Creating message in thread {self.conversation_thread}")
+
+            logger.debug("Creating message in thread %s", self.conversation_thread)
             await client.beta.threads.messages.create(
                 thread_id=self.conversation_thread,
                 role="user",
                 content=message
             )
 
-            logger.debug(f"Starting run with assistant {self.assistant_id}")
+            logger.debug("Starting run with assistant %s", self.assistant_id)
             run = await client.beta.threads.runs.create(
                 thread_id=self.conversation_thread,
                 assistant_id=self.assistant_id,
@@ -164,7 +164,7 @@ class Assistant:
 
             # 実行完了を待ち、usage情報を取得
             completed_run = await self.poll_run(run.id, self.conversation_thread)
-            
+
             messages = await client.beta.threads.messages.list(
                 thread_id=self.conversation_thread
             )
@@ -196,7 +196,7 @@ class Assistant:
             logger.info("run status: %s", run.status)
             if run.status in ['completed', 'requires_action']:
                 return run
-            elif run.status in ['failed', 'cancelled', 'expired']:
+            if run.status in ['failed', 'cancelled', 'expired']:
                 raise Exception(f"Run failed with status: {run.status}")
             await asyncio.sleep(0.5)
 
@@ -204,11 +204,11 @@ class Assistant:
         while True:
             try:
                 run = await self.poll_run(run_id, thread_id)
-                logger.debug(f"Run status: {run.status}")
-                
+                logger.debug("Run status: %s", run.status)
+
                 if run.status == 'completed':
                     return run
-                elif run.status in ['failed', 'cancelled', 'expired']:
+                if run.status in ['failed', 'cancelled', 'expired']:
                     # 失敗した場合は実行をキャンセル
                     await client.beta.threads.runs.cancel(
                         thread_id=thread_id,
@@ -239,7 +239,7 @@ class Assistant:
 
                     for tool in run.required_action.submit_tool_outputs.tool_calls:
                         logger.info(f"Processing tool call: {json.dumps(tool.model_dump(), indent=2)}")
-                        
+
                         if tool.type != "function":
                             logger.info("no function tool: %s", tool)
                             continue

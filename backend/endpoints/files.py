@@ -85,7 +85,7 @@ async def download_file(file_id: str):
     try:
         file_metadata = await client.files.retrieve(file_id)
         file_content = await client.files.content(file_id)
-        
+
         return Response(
             content=file_content.content,
             media_type="application/octet-stream",

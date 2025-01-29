@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import aiofiles
 from endpoints import router
-from services.openai import assistant, call_dxa_factory, client, TOOLS
-from settings import env
+from services.openai import assistant, client, TOOLS
 from utils.log import logger
 
 app = FastAPI()
@@ -28,20 +27,20 @@ async def initialize_on_startup():
             vector_stores = await client.beta.vector_stores.list()
             if vector_stores.data:
                 assistant.vector_store_id = vector_stores.data[0].id
-                logger.info(f"Reusing existing vector store: {assistant.vector_store_id}")
+                logger.info("Reusing existing vector store: %s", assistant.vector_store_id)
             else:
                 vector_store = await client.beta.vector_stores.create()
                 assistant.vector_store_id = vector_store.id
-                logger.info(f"New vector store created with ID: {assistant.vector_store_id}")
+                logger.info("New vector store created with ID: %s", assistant.vector_store_id)
 
         # 2. 既存のアシスタントを削除
         if assistant.assistant_id:
             try:
                 await client.beta.assistants.delete(assistant.assistant_id)
-                logger.info(f"Deleted existing assistant: {assistant.assistant_id}")
+                logger.info("Deleted existing assistant: %s", assistant.assistant_id)
                 assistant.assistant_id = None
             except Exception as e:
-                logger.warning(f"Failed to delete assistant: {str(e)}")
+                logger.warning("Failed to delete assistant: %s", e)
                 assistant.assistant_id = None
 
         # 3. 新しいアシスタントを作成
@@ -54,16 +53,16 @@ async def initialize_on_startup():
             tool_resources={"file_search": {"vector_store_ids": [assistant.vector_store_id]}}
         )
         assistant.assistant_id = new_assistant.id
-        logger.info(f"Created new assistant with ID: {assistant.assistant_id}")
+        logger.info("Created new assistant with ID: %s", assistant.assistant_id)
 
         # 4. 会話スレッドの作成
         thread = await client.beta.threads.create()
         assistant.conversation_thread = thread.id
-        logger.info(f"Thread created with ID: {assistant.conversation_thread}")
+        logger.info("Thread created with ID: %s", assistant.conversation_thread)
 
         logger.info("Assistant initialization completed successfully")
     except Exception as e:
-        logger.error(f"Error initializing assistant on startup: {str(e)}")
+        logger.error("Error initializing assistant on startup: %s", e)
         raise
 
 

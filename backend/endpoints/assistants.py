@@ -19,10 +19,10 @@ async def initialize_assistant(request: dict):
                 # 既存のアシスタントが有効か確認
                 existing_assistant = await client.beta.assistants.retrieve(assistant.assistant_id)
                 logger.info(f"Reusing existing assistant: {existing_assistant.id}")
-                
+
                 # 新しいスレッドを作成
                 thread = await client.beta.threads.create()
-                
+
                 return {
                     "assistant_id": existing_assistant.id,
                     "thread_id": thread.id,
@@ -72,7 +72,7 @@ async def check_assistant():
             except Exception as e:
                 logger.warning(f"Failed to retrieve assistant: {str(e)}")
                 assistant.assistant_id = None  # 無効なアシスタントIDをリセット
-        
+
         return {"assistant_id": None}
 
     except Exception as e:
