@@ -395,8 +395,30 @@ function App() {
                     sx={{ 
                       p: 2, 
                       maxWidth: '70%',
-                      bgcolor: message.isUser ? 'primary.main' : 'background.paper',
-                      color: message.isUser ? 'primary.contrastText' : 'text.primary'
+                      bgcolor: message.isUser 
+                        ? 'primary.main'
+                        : message.isFunctionCall 
+                          ? 'rgba(45, 55, 72, 0.95)' // Darker and more opaque
+                          : 'background.paper',
+                      color: message.isUser ? 'primary.contrastText' : 'text.primary',
+                      ...(message.isFunctionCall && {
+                        borderLeft: '4px solid',
+                        borderColor: 'primary.main',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                        position: 'relative',
+                        '&::before': {
+                          content: '"DXA"',
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          fontSize: '0.75rem',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: 'primary.main',
+                          color: 'primary.contrastText',
+                          opacity: 0.8
+                        }
+                      })
                     }}
                   >
                     {message.text && !message.isUser ? (

@@ -38,11 +38,13 @@ export const useChat = () => {
                 setThinkingText(event.data);
                 break;
               case 'complete':
+                console.log('Complete event data:', event.data);
                 setMessages(prev => [...prev, {
                   text: event.data.text,
                   isUser: false,
                   tokenUsage: event.data.token_usage,
-                  files: event.data.files
+                  files: event.data.files,
+                  isFunctionCall: event.data.is_function_call
                 }]);
                 break;
             }
