@@ -1,151 +1,166 @@
-# JURAC Webインターフェース
+# JURAC Web Interface
 
-OpenAIのAPIを統合した、ファイル管理機能を備えたフルスタックWebアプリケーションです。
+A full-stack web application featuring OpenAI API integration and file management capabilities.
 
-## 主な機能
+## Key Features
 
-- AIアシスタントによるリアルタイムチャットインターフェース
-- ファイルのアップロードと管理システム
-- 画像のアップロードと処理
-- チャットメッセージのMarkdownレンダリング
-- トークン使用量の追跡
-- ダークモードUI
-- ファイルのダウンロード機能
-- 文脈理解を強化するベクターストアの統合
+- Real-time chat interface with AI assistant
+- File upload and management system
+- Image upload and processing
+- Markdown rendering for chat messages
+- Token usage tracking
+- Dark mode UI
+- File download functionality
+- Vector store integration for enhanced context understanding
 
-## 必要条件
+## Requirements
 
-- Node.js (v14以降)
-- Python (3.10以降)
-- OpenAI APIキー
+- Node.js (v18 or later recommended)
+- Python (3.10 or later)
+- OpenAI API key
 
-## 環境変数
+## Environment Variables
 
-ルートディレクトリに`.env`ファイルを作成し、以下の変数を設定してください：
+Create a `.env` file in the root directory and set the following variables:
 
 ```
 OPENAI_API_KEY=your_openai_api_key
-ASSISTANT_ID=your_assistant_id (オプション)
+ASSISTANT_ID=your_assistant_id (optional)
 AIKO_API_DOMAIN=your_aiko_api_domain
 AIKO_API_KEY=your_aiko_api_key
 AIKO_CONVERSATION_ID=your_aiko_conversation_id
 ```
 
-## インストール手順
+## Installation
 
-### バックエンド設定
+### Backend Setup
 
-1. Pythonの仮想環境を作成し、有効化します：
+1. Create and activate Python virtual environment:
 ```bash
 python -m venv venv
-source venv/bin/activate  # Windowsの場合: venv\Scripts\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. Python依存パッケージのインストール：
+2. Install Python dependencies:
 ```bash
-pip install fastapi uvicorn python-dotenv openai aiofiles
-pip install python-multipart requests
+pip install fastapi uvicorn python-dotenv openai aiofiles python-multipart requests pyyaml
 ```
 
-### フロントエンド設定
+### Frontend Setup
 
-1. Node.js依存パッケージのインストール：
+1. Navigate to frontend directory:
+```bash
+cd frontend
+```
+
+2. Install Node.js dependencies:
 ```bash
 npm install
 ```
 
-## プロジェクト構造
+## Project Structure
 
 ```
 ├── backend/
-│   └── main.py                 # FastAPIバックエンドサーバー
+│   ├── endpoints/         # API endpoint implementations
+│   ├── services/         # Business logic
+│   ├── settings/        # Configuration files
+│   ├── utils/           # Utility functions
+│   ├── downloaded_files/ # Downloaded files storage
+│   ├── main.py          # FastAPI application
+│   └── instructions.yaml # Assistant configuration
 ├── frontend/
+│   ├── public/          # Static files
 │   ├── src/
-│   │   ├── App.tsx            # メインReactアプリケーション
-│   │   ├── index.tsx          # Reactエントリーポイント
-│   │   └── index.css          # グローバルスタイル
-│   └── setupProxy.js          # 開発用プロキシ設定
+│   │   ├── components/  # React components
+│   │   ├── hooks/      # Custom hooks
+│   │   ├── types/     # TypeScript definitions
+│   │   ├── App.tsx    # Main application
+│   │   └── index.tsx  # Entry point
+│   ├── package.json    # Frontend dependencies
+│   └── tsconfig.json   # TypeScript configuration
 └── README.md
 ```
 
-## アプリケーションの実行
+## Running the Application
 
-1. バックエンドサーバーの起動：
+1. Start the backend server:
 ```bash
-# ルートディレクトリから
+# From backend directory
 uvicorn main:app --reload --port 8000
 ```
 
-2. フロントエンド開発サーバーの起動：
+2. Start the frontend development server:
 ```bash
-# フロントエンドディレクトリから
+# From frontend directory
 npm start
 ```
 
-アプリケーションは `http://localhost:3000` でアクセスできます。
+The application will be accessible at `http://localhost:3000`
 
-## APIエンドポイント
+## Core Dependencies
 
-### チャット
-- `POST /api/chat` - AIアシスタントにメッセージを送信
+### Backend
+- FastAPI - High-performance web framework
+- OpenAI - AI model integration
+- Python-dotenv - Environment variable management
+- Uvicorn - ASGI server
+- Aiofiles - Asynchronous file operations
+- PyYAML - YAML configuration file processing
 
-### ファイル管理
-- `GET /api/files` - アップロードされたファイル一覧の取得
-- `POST /api/upload` - 新規ファイルのアップロード
-- `DELETE /api/files/{file_id}` - 特定のファイルの削除
-- `GET /api/files/{file_id}/download` - 特定のファイルのダウンロード
-- `DELETE /api/files` - 全ファイルの削除
-
-### システム
-- `GET /api/system-info` - システム情報の取得
-- `POST /api/initialize-assistant` - AIアシスタントの初期化
-- `GET /api/check-assistant` - アシスタントの状態確認
-- `GET /api/vector-stores` - ベクターストアの一覧取得
-
-### 画像処理
-- `POST /api/upload-image` - チャット用画像のアップロード
-
-## 使用技術
-
-### バックエンド
-- FastAPI
-- OpenAI API
-- Python-dotenv
-- Uvicorn
-- Aiofiles
-
-### フロントエンド
-- React
-- TypeScript
-- Material-UI
+### Frontend
+- React 18
+- TypeScript 4.9
+- Material-UI (MUI) v5
 - React Markdown
+- Emotion (Styling)
 - HTTP Proxy Middleware
 
-## 開発メモ
+## API Endpoints
 
-- OpenAIの最新APIを使用（ベクターストアとアシスタントを含む）
-- アップロードされたファイルはOpenAIシステムとベクターストアの両方に保存
-- チャットインターフェースはテキストと画像の入力に対応
-- アシスタントの応答ごとにトークン使用量を表示
-- メッセージ間で会話コンテキストを維持
+### Chat
+- `POST /api/chat` - Interact with AI assistant
 
-## エラーハンドリング
+### File Management
+- `GET /api/files` - Get file list
+- `POST /api/upload` - Upload file
+- `DELETE /api/files/{file_id}` - Delete file
+- `GET /api/files/{file_id}/download` - Download file
+- `DELETE /api/files` - Delete all files
 
-以下の状況に対する包括的なエラーハンドリングを実装：
-- API通信の問題
-- ファイルのアップロード/ダウンロードの失敗
-- アシスタント初期化の問題
-- ベクターストアの操作
+### System
+- `GET /api/system-info` - Get system information
+- `POST /api/initialize-assistant` - Initialize assistant
+- `GET /api/check-assistant` - Check assistant status
+- `GET /api/vector-stores` - List vector stores
 
-## セキュリティ対策
+### Image Processing
+- `POST /api/upload-image` - Upload chat image
 
-- バックエンドでCORSを設定
-- APIキーは環境変数で管理
-- ファイル操作は適切なエラーハンドリングを伴う安全な処理
+## Security Measures
 
-## 制限事項
+- Secure management of sensitive information using environment variables
+- Proper CORS policy configuration
+- File upload validation
+- Comprehensive error handling implementation
 
-- 適切な権限を持つOpenAI APIキーが必要
-- 画像処理は対応フォーマットのみ（JPEG、PNG、GIF、WEBP）
-- ベクターストアの操作はOpenAIのサービス可用性に依存
-- Python 3.10以降が必要（古いバージョンでは動作しません）
+## Limitations
+
+- OpenAI API key required
+- Supported image formats: JPEG, PNG, GIF, WEBP
+- Python 3.10 or later required
+- Node.js v18 or later recommended
+
+## Troubleshooting
+
+1. API Errors
+   - Verify environment variables configuration
+   - Check OpenAI API key validity
+
+2. File Operation Errors
+   - Check directory permissions
+   - Verify file size limits
+
+3. Connection Issues
+   - Confirm backend server is running
+   - Verify proxy settings
