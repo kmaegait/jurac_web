@@ -60,7 +60,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 2. Install Python dependencies:
 ```bash
-pip install fastapi uvicorn python-dotenv openai aiofiles python-multipart requests pyyaml
+pip install fastapi uvicorn python-dotenv openai aiofiles python-multipart requests
 ```
 
 ### Frontend Setup
@@ -123,7 +123,6 @@ The application will be accessible at `http://localhost:3000`
 - Python-dotenv - Environment variable management
 - Uvicorn - ASGI server
 - Aiofiles - Asynchronous file operations
-- PyYAML - YAML configuration file processing
 
 ### Frontend
 - React 18
