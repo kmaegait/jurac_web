@@ -398,25 +398,30 @@ function App() {
                       bgcolor: message.isUser 
                         ? 'primary.main'
                         : message.isDxaResponse 
-                          ? 'rgba(255, 223, 186, 0.95)' // Example color for DXA responses
+                          ? 'grey.300'
                           : 'background.paper',
-                      color: message.isUser ? 'primary.contrastText' : 'text.primary',
+                      color: message.isUser 
+                        ? 'primary.contrastText' 
+                        : message.isDxaResponse
+                          ? '#000000'  // DXAレスポンスの文字色を黒に
+                          : 'text.primary',
                       ...(message.isDxaResponse && {
                         borderLeft: '4px solid',
-                        borderColor: 'orange',
+                        borderColor: 'primary.main',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                         position: 'relative',
+                        backgroundColor: '#e0e0e0',
                         '&::before': {
                           content: '"DXA"',
                           position: 'absolute',
-                          top: 8,
+                          bottom: 8,
                           right: 8,
                           fontSize: '0.75rem',
                           padding: '2px 6px',
                           borderRadius: '4px',
-                          backgroundColor: 'orange',
-                          color: 'white',
-                          opacity: 0.8
+                          backgroundColor: 'primary.main',
+                          color: 'primary.contrastText',
+                          opacity: 0.9
                         }
                       })
                     }}
