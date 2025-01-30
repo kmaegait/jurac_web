@@ -397,13 +397,13 @@ function App() {
                       maxWidth: '70%',
                       bgcolor: message.isUser 
                         ? 'primary.main'
-                        : message.isFunctionCall 
-                          ? 'rgba(45, 55, 72, 0.95)' // Darker and more opaque
+                        : message.isDxaResponse 
+                          ? 'rgba(255, 223, 186, 0.95)' // Example color for DXA responses
                           : 'background.paper',
                       color: message.isUser ? 'primary.contrastText' : 'text.primary',
-                      ...(message.isFunctionCall && {
+                      ...(message.isDxaResponse && {
                         borderLeft: '4px solid',
-                        borderColor: 'primary.main',
+                        borderColor: 'orange',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                         position: 'relative',
                         '&::before': {
@@ -414,8 +414,8 @@ function App() {
                           fontSize: '0.75rem',
                           padding: '2px 6px',
                           borderRadius: '4px',
-                          backgroundColor: 'primary.main',
-                          color: 'primary.contrastText',
+                          backgroundColor: 'orange',
+                          color: 'white',
                           opacity: 0.8
                         }
                       })

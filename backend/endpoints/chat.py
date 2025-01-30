@@ -164,6 +164,9 @@ async def stream_chat_response(message_content: str | list, thread_id: str, assi
             "data": "Thinking..."
         }) + "\n"
 
+        # DXA function call tracking
+        has_dxa_response = False
+
         # メッセージを作成
         await client.beta.threads.messages.create(
             thread_id=thread_id,
@@ -198,6 +201,7 @@ async def stream_chat_response(message_content: str | list, thread_id: str, assi
                         # Function実行結果を処理
                         tool_outputs = []
                         if tool_call.function.name == "call_dxa_factory":
+                            has_dxa_response = True  # Set flag for DXA response
                             try:
                                 arg = json.loads(tool_call.function.arguments)
                                 answer = call_dxa_factory(arg['question'])
@@ -274,9 +278,11 @@ async def stream_chat_response(message_content: str | list, thread_id: str, assi
                                 "completion_tokens": run_status.usage.completion_tokens,
                                 "total_tokens": run_status.usage.total_tokens
                             },
-                            "files": downloaded_files
+                            "files": downloaded_files,
+                            "isDxaResponse": has_dxa_response
                         }
                     }
+                    logger.info(f"Sending response with isDxaResponse: {has_dxa_response}")
                     yield json.dumps(response) + "\n"
                 break
 

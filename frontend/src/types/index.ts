@@ -18,6 +18,7 @@ export interface Message {
   files?: FileInfo[];
   runSteps?: RunStep[];
   isFunctionCall?: boolean;
+  isDxaResponse?: boolean;
 }
 
 export interface RunStepToolCall {
