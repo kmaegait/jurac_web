@@ -78,3 +78,32 @@ async def check_assistant():
     except Exception as e:
         logger.error(f"Error checking assistant: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/dxa-call")
+async def dxa_call(request: dict):
+    try:
+        # DXA呼び出しの処理を行う
+        question = request.get("question")
+        if not question:
+            raise HTTPException(status_code=400, detail="Missing question")
+
+        # DXA呼び出しの結果を取得
+        raw_answer = call_dxa_factory(question)
+
+        # スタイル情報を追加
+        response = {
+            "answer": raw_answer,
+            "style": {
+                "backgroundColor": "rgba(45, 55, 72, 0.95)",
+                "borderLeft": "4px solid",
+                "borderColor": "primary.main",
+                "boxShadow": "0 2px 4px rgba(0,0,0,0.2)",
+                "label": "DXA"
+            },
+            "is_function_call": True
+            }
+
+        return response
+    except Exception as e:
+        logger.error(f"Error in DXA call: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

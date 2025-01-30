@@ -17,6 +17,8 @@ export interface Message {
   images?: string[];
   files?: FileInfo[];
   runSteps?: RunStep[];
+  isFunctionCall?: boolean;
+  isDxaResponse?: boolean;
 }
 
 export interface RunStepToolCall {

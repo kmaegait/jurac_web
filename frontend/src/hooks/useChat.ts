@@ -38,14 +38,19 @@ export const useChat = () => {
                 setThinkingText(event.data);
                 break;
               case 'complete':
+                console.log('Complete event data:', event.data);
+                console.log('isDxaResponse:', event.data.isDxaResponse);
                 setMessages(prev => [...prev, {
                   text: event.data.text,
                   isUser: false,
                   tokenUsage: event.data.token_usage,
-                  files: event.data.files
+                  files: event.data.files,
+                  isDxaResponse: event.data.isDxaResponse
                 }]);
                 break;
             }
+            console.log('Event data:', event.data);
+            console.log('isFunctionCall:', event.data.is_function_call);
           } catch (e) {
             console.error('Error parsing event:', e);
           }
@@ -64,7 +69,7 @@ export const useChat = () => {
       setThinkingText("Thinking...");
       
       const currentInput = input.trim();
-      
+
       // 画像のアップロード処理
       const uploadedImageUrls = await Promise.all(
         selectedImages.map(async (base64Image) => {
