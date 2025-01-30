@@ -2,6 +2,23 @@
 
 A full-stack web application featuring OpenAI API integration and file management capabilities.
 
+## Description
+
+JURAC Web Interface is a modern, feature-rich web application that combines the power of OpenAI's language models with robust file management capabilities. The application is designed to provide an intuitive interface for AI-assisted interactions while maintaining secure and efficient file handling.
+
+### Core Functionality
+- **AI Integration**: Leverages OpenAI's latest API for intelligent conversations and content generation
+- **File System**: Secure file upload, storage, and management with support for various file types
+- **Vector Store**: Enhanced context understanding through vector-based storage and retrieval
+- **Real-time Processing**: Immediate response handling and real-time updates
+- **Responsive Design**: Modern UI with dark mode support for optimal user experience
+
+### Technical Overview
+- **Architecture**: Full-stack implementation with FastAPI backend and React frontend
+- **Security**: Built-in security measures including environment variable management and CORS
+- **Scalability**: Modular design allowing for easy expansion and maintenance
+- **Performance**: Optimized for quick response times and efficient resource usage
+
 ## Key Features
 
 - Real-time chat interface with AI assistant
