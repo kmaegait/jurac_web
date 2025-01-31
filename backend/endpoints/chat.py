@@ -21,6 +21,7 @@ class Message(BaseModel):
 class StreamingEvent:
     THINKING = "thinking"
     FUNCTION_CALL = "function_call"
+    DXA_FACTORY = "dxa_factory"
     COMPLETE = "complete"
 
 
@@ -204,7 +205,12 @@ async def stream_chat_response(message_content: str | list, thread_id: str, assi
                             has_dxa_response = True  # Set flag for DXA response
                             try:
                                 arg = json.loads(tool_call.function.arguments)
-                                answer = call_dxa_factory(arg['question'])
+                                dxa_response = call_dxa_factory(arg['question'])
+                                yield json.dumps({
+                                    "type": StreamingEvent.DXA_FACTORY,
+                                    "data": dxa_response
+                                }) + "\n"
+                                answer = dxa_response['answer']['response']['task_result']['content']
                                 tool_outputs.append({
                                     "tool_call_id": tool_call.id,
                                     "output": answer if answer else "該当する決算情報が見つかりませんでした。"

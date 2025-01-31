@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Message, ImageDetailLevel } from '../types';
+import { DxaResponse, Message, ImageDetailLevel } from '../types';
 
 export const useChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,6 +36,13 @@ export const useChat = () => {
                 break;
               case 'function_call':
                 setThinkingText(event.data);
+                break;
+              case 'dxa_factory':
+                // レスポンス内容
+                const dxaResponse: DxaResponse = event.data;
+                console.log(dxaResponse);
+                // 回答
+                console.log(dxaResponse.answer.response.task_result.content);
                 break;
               case 'complete':
                 console.log('Complete event data:', event.data);
