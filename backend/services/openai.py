@@ -64,7 +64,7 @@ def _generate_aiko_message(query):
         return f"request failed. status: {response.status_code}"
     data = response.json()
     logger.info(data)
-    return data['answer']['response']['task_result']['content']
+    return data
 
 
 def call_dxa_factory(question: str) -> str:
@@ -248,7 +248,7 @@ class Assistant:
                             try:
                                 arg = json.loads(tool.function.arguments)
                                 logger.info("Processing securities report question: %s", arg['question'])
-                                answer = call_dxa_factory(arg['question'])
+                                answer = call_dxa_factory(arg['question'])['answer']['response']['task_result']['content']
                                 if not answer:
                                     logger.warning("No answer found in securities report")
                                     answer = "申し訳ありません。該当する決算情報が見つかりませんでした。"

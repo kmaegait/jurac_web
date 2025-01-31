@@ -42,4 +42,42 @@ export interface RunStep {
   };
 }
 
-export type ImageDetailLevel = 'low' | 'high' | 'auto'; 
+export type ImageDetailLevel = 'low' | 'high' | 'auto';
+
+export interface DxaResponse {
+  status: string;
+  answer: DxaAnswer;
+}
+
+export interface DxaAnswer {
+  response: DxaAnswerResponse;
+  success: boolean;
+  task_id: string;
+}
+
+export interface DxaAnswerResponse {
+  main_task: string;
+  ooda_task_id: string;
+  substasks: DxaTask[];
+  task_result: DxaTaskResult;
+}
+
+export interface DxaTask {
+  status: string;
+  task: string;
+  task_id: string;
+  task_result: DxaTaskResult;
+}
+
+export interface DxaTaskResult {
+  citations: DxaTaskCitation[];
+  content: string;
+}
+
+export interface DxaTaskCitation {
+  file_path: string;
+  image_src: string; // 現状nullが返却されている、おそらくstring
+  page_index: number;
+  source: string;
+  type: string;
+}
