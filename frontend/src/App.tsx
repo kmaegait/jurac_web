@@ -33,6 +33,7 @@ import { useFileManager } from './hooks/useFileManager';
 import { useSystemInfo } from './hooks/useSystemInfo';
 import { useScrollToBottom } from './hooks/useScrollToBottom';
 import { Message, FileInfo, ImageDetailLevel } from './types';
+import DxaDebugResponse from './components/DxaDebugResponse';
 
 const darkTheme = createTheme({
   palette: {
@@ -58,7 +59,10 @@ function App() {
     imageDetailLevel,
     setImageDetailLevel,
     sendMessage,
-    thinkingText
+    thinkingText,
+    dxaResponse,
+    setDxaResponse,
+    clearMessages,
   } = useChat();
 
   const {
@@ -797,6 +801,14 @@ function App() {
           </Paper>
         </Box>
       </Box>
+
+      {/* DXA Debug Response */}
+      {dxaResponse && (
+        <DxaDebugResponse 
+          response={dxaResponse} 
+          onClose={() => setDxaResponse(null)}
+        />
+      )}
     </ThemeProvider>
   );
 }
