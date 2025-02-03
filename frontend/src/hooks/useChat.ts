@@ -8,6 +8,7 @@ export const useChat = () => {
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [imageDetailLevel, setImageDetailLevel] = useState<ImageDetailLevel>('auto');
   const [thinkingText, setThinkingText] = useState<string>("Thinking...");
+  const [dxaResponse, setDxaResponse] = useState<DxaResponse | null>(null);
 
   const processStream = async (response: Response) => {
     const reader = response.body?.getReader();
@@ -38,11 +39,9 @@ export const useChat = () => {
                 setThinkingText(event.data);
                 break;
               case 'dxa_factory':
-                // レスポンス内容
                 const dxaResponse: DxaResponse = event.data;
-                console.log(dxaResponse);
-                // 回答
-                console.log(dxaResponse.answer.response.task_result.content);
+                setDxaResponse(dxaResponse);
+                console.log('DXA Response:', dxaResponse);
                 break;
               case 'complete':
                 console.log('Complete event data:', event.data);
@@ -155,6 +154,13 @@ export const useChat = () => {
     }
   }, [input, selectedImages, isLoading, imageDetailLevel]);
 
+  const clearMessages = () => {
+    setMessages([]);
+    setInput('');
+    setSelectedImages([]);
+    setDxaResponse(null);
+  };
+
   return {
     messages,
     input,
@@ -164,7 +170,10 @@ export const useChat = () => {
     setSelectedImages,
     imageDetailLevel,
     setImageDetailLevel,
+    thinkingText,
+    dxaResponse,
+    setDxaResponse,
     sendMessage,
-    thinkingText
+    clearMessages,
   };
 }; 
