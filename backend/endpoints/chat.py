@@ -8,7 +8,6 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from services.openai import call_dxa_factory, client, get_assistant
-from settings import const
 from utils.log import logger
 
 router = APIRouter()
@@ -139,7 +138,7 @@ async def chat(message: Message):
 
         # メッセージを作成して送信
         return StreamingResponse(
-            stream_chat_response(content, assistant.conversation_thread, assistant.assistant_id),
+            stream_chat_response(content, assistant),
             media_type="text/event-stream"
         )
     except Exception as e:
@@ -157,8 +156,10 @@ async def chat(message: Message):
         )
 
 
-async def stream_chat_response(message_content: str | list, thread_id: str, assistant_id: str):
+async def stream_chat_response(message_content: str | list, assistant):
     try:
+        thread_id = assistant.conversation_thread
+        assistant_id = assistant.assistant_id
         # 初期のthinkingイベント
         yield json.dumps({
             "type": StreamingEvent.THINKING,
@@ -179,7 +180,7 @@ async def stream_chat_response(message_content: str | list, thread_id: str, assi
         run = await client.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=assistant_id,
-            model=const.DEFAULT_MODEL_NAME,
+            model=assistant.model,
             tool_choice="auto"
         )
 
