@@ -17,7 +17,7 @@ export const useSystemInfo = () => {
       }
       const data = await response.json();
       
-      if (data.assistant_id && data.vector_store_id) {
+      if (data.assistant_id) {
         setAssistantId(data.assistant_id);
         setVectorStoreId(data.vector_store_id);
         setInitializationStatus('Initialization successful');

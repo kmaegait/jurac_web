@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import aiofiles
 from endpoints import router
-from services.openai import get_assistant, client, TOOLS
-from settings import const
+from services.openai import get_assistant
 from utils.log import logger
 
 app = FastAPI()
@@ -20,18 +19,14 @@ app.add_middleware(
 app.include_router(router)
 
 # サーバー起動時の初期化関数
-async def initialize_on_startup():
+@app.on_event("startup")
+async def startup_event():
     try:
         assistant = await get_assistant()
         logger.info("Assistant initialization completed successfully")
     except Exception as e:
         logger.error("Error initializing assistant on startup: %s", e)
         raise
-
-
-@app.on_event("startup")
-async def startup_event():
-    await initialize_on_startup()
 
 
 if __name__ == "__main__":
