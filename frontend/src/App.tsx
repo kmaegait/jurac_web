@@ -35,18 +35,18 @@ import { useScrollToBottom } from './hooks/useScrollToBottom';
 import { FileInfo, ImageDetailLevel } from './types';
 import DxaDebugResponse from './components/DxaDebugResponse';
 
-const darkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-  },
-});
-
-// CustomCodePropsの型定義を追加
+/* Add back the CustomCodeProps interface without comment */
 interface CustomCodeProps {
   inline?: boolean;
   className?: string;
   children?: React.ReactNode;
 }
+
+const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+  },
+});
 
 function App() {
   const {
