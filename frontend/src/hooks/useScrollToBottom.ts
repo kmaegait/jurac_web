@@ -4,6 +4,8 @@ export const useScrollToBottom = (
   messagesEndRef: RefObject<HTMLDivElement>,
   dependencies: any[]
 ) => {
+  const flatDependencies = [messagesEndRef].concat(dependencies);
+
   useEffect(() => {
     const scrollToBottom = () => {
       if (messagesEndRef.current) {
@@ -37,5 +39,5 @@ export const useScrollToBottom = (
         };
       }
     });
-  }, dependencies);
+  }, flatDependencies);
 }; 

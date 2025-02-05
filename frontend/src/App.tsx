@@ -32,21 +32,21 @@ import { useChat } from './hooks/useChat';
 import { useFileManager } from './hooks/useFileManager';
 import { useSystemInfo } from './hooks/useSystemInfo';
 import { useScrollToBottom } from './hooks/useScrollToBottom';
-import { Message, FileInfo, ImageDetailLevel } from './types';
+import { FileInfo, ImageDetailLevel } from './types';
 import DxaDebugResponse from './components/DxaDebugResponse';
+
+/* Add back the CustomCodeProps interface without comment */
+interface CustomCodeProps {
+  inline?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+}
 
 const darkTheme = createTheme({
   palette: {
     mode: 'dark',
   },
 });
-
-// CustomCodePropsの型定義を追加
-interface CustomCodeProps {
-  inline?: boolean;
-  className?: string;
-  children?: React.ReactNode;
-}
 
 function App() {
   const {
@@ -62,7 +62,6 @@ function App() {
     thinkingText,
     dxaResponse,
     setDxaResponse,
-    clearMessages,
   } = useChat();
 
   const {
@@ -77,7 +76,6 @@ function App() {
     assistantId,
     vectorStoreId,
     initializationStatus,
-    isInitializing,
     initializeAssistant
   } = useSystemInfo();
 
