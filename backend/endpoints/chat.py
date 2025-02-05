@@ -7,7 +7,8 @@ from typing import Optional, List
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from services.openai import assistant, call_dxa_factory, client
+from services.openai import call_dxa_factory, client, get_assistant
+from settings import const
 from utils.log import logger
 
 router = APIRouter()
@@ -15,6 +16,7 @@ router = APIRouter()
 class Message(BaseModel):
     text: str = ""
     content: Optional[List] = None
+    model: str | None = None
 
 
 # ストリーミングイベントの種類を定義
@@ -28,8 +30,10 @@ class StreamingEvent:
 @router.post("/chat")
 async def chat(message: Message):
     try:
-        if not assistant.conversation_thread or not assistant.assistant_id:
-            await assistant.initialize()
+        if message.model:
+            assistant = await get_assistant(message.model)
+        else:
+            assistant = await get_assistant()
 
         content = []
 
@@ -41,7 +45,6 @@ async def chat(message: Message):
             # コマンド処理
             if command_lower == '/asst':
                 try:
-                    await assistant.initialize_for_asst()
                     assistant_info = await client.beta.assistants.retrieve(assistant.assistant_id)
 
                     info_text = (
@@ -74,9 +77,6 @@ async def chat(message: Message):
                             stream_single_response("Error: Instructions cannot be empty"),
                             media_type="text/event-stream"
                         )
-
-                    if not assistant.assistant_id:
-                        await assistant.initialize_for_asst()
 
                     updated_assistant = await client.beta.assistants.update(
                         assistant_id=assistant.assistant_id,
@@ -179,7 +179,7 @@ async def stream_chat_response(message_content: str | list, thread_id: str, assi
         run = await client.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=assistant_id,
-            model="gpt-4o",
+            model=const.DEFAULT_MODEL_NAME,
             tool_choice="auto"
         )
 
