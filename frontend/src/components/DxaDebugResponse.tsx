@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DxaResponse, DxaAnswer, DxaAnswerResponse, DxaTask, DxaTaskResult, DxaTaskCitation } from '../types';
+import { DxaResponse, DxaTask, DxaTaskResult, DxaTaskCitation } from '../types';
 import { motion } from 'framer-motion';
 import {
   Box,

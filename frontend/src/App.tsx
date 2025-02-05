@@ -32,7 +32,7 @@ import { useChat } from './hooks/useChat';
 import { useFileManager } from './hooks/useFileManager';
 import { useSystemInfo } from './hooks/useSystemInfo';
 import { useScrollToBottom } from './hooks/useScrollToBottom';
-import { Message, FileInfo, ImageDetailLevel } from './types';
+import { FileInfo, ImageDetailLevel } from './types';
 import DxaDebugResponse from './components/DxaDebugResponse';
 
 const darkTheme = createTheme({
@@ -62,7 +62,6 @@ function App() {
     thinkingText,
     dxaResponse,
     setDxaResponse,
-    clearMessages,
   } = useChat();
 
   const {
@@ -77,7 +76,6 @@ function App() {
     assistantId,
     vectorStoreId,
     initializationStatus,
-    isInitializing,
     initializeAssistant
   } = useSystemInfo();
 
