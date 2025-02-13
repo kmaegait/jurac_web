@@ -3,16 +3,13 @@ import json
 import requests
 from requests.exceptions import RequestException
 from openai import AsyncOpenAI
-from settings import env
+from settings import const, env
 from utils.log import logger
 
 # グローバル定数の定義
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "call_dxa_factory",
-            "description": """
+DXA_FUNCTION_DESC = {
+    "name": "call_dxa_factory",
+    "description": """
 決算短信や財務情報に関する質問に回答します。
 以下のような質問に対して使用します：
 - 決算短信の内容に関する質問
@@ -24,23 +21,37 @@ TOOLS = [
 - 「純利益の前年比はどうですか？」
 - 「決算における業績の特徴は？」
 """,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "question": {
-                        "type": "string",
-                        "description": "決算短信に関する具体的な質問内容",
-                    },
-                },
-                "required": ["question"],
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": "決算短信に関する具体的な質問内容",
             },
         },
+        "required": ["question"],
     },
+}
+
+TOOLS = [
+    {"type": "function", "function": DXA_FUNCTION_DESC},
     {"type": "code_interpreter"},
-    {"type": "file_search"}
+    {"type": "file_search"},
 ]
 
 client = AsyncOpenAI(api_key=env.API_KEY)
+
+# グローバルなアシスタントインスタンスを作成, key: model, value: Assistant
+assistant_dict = {}
+
+async def get_assistant(model: str = const.DEFAULT_MODEL_NAME):
+    assistant = assistant_dict.get(model)
+    if not assistant:
+        assistant = Assistant(model)
+        await assistant.initialize()
+        assistant_dict[model] = assistant
+    return assistant
+
 
 def _generate_aiko_message(query):
     # TODO 一旦固定で作成済みのconversation_idを使用
@@ -72,10 +83,10 @@ def call_dxa_factory(question: str) -> str:
 
 
 class Assistant:
-    def __init__(self):
+    def __init__(self, model = const.DEFAULT_MODEL_NAME):
         self.conversation_thread = None
         self.assistant_id = None
-        self.model = "gpt-4o"
+        self.model = model
         self.instructions = self.read_instructions()
         self.vector_store_id = None
 
@@ -90,7 +101,7 @@ class Assistant:
     async def initialize(self):
         try:
             # 1. まず最初にベクターストアの確認と設定
-            if not self.vector_store_id:
+            if self.model in const.FILE_SEARCH_MODELS and not self.vector_store_id:
                 logger.debug("Checking existing vector stores...")
                 vector_stores = await client.beta.vector_stores.list()
                 if vector_stores.data:
@@ -107,7 +118,7 @@ class Assistant:
             # 2. アシスタントの設定
             if not self.assistant_id:
                 # 環境変数からアシスタントIDを取得
-                env_assistant_id = env.ASSISTANT_ID
+                env_assistant_id = env.ASSISTANT_ID if self.model == const.DEFAULT_MODEL_NAME else ""
                 if env_assistant_id:
                     try:
                         # 環境変数のアシスタントIDが有効か確認
@@ -121,13 +132,21 @@ class Assistant:
             # アシスタントIDがない場合は新規作成
             if not self.assistant_id:
                 logger.info("Creating new assistant...")
-                new_assistant = await client.beta.assistants.create(
-                    name="Assistant",
-                    model=self.model,
-                    instructions=self.instructions,
-                    tools=TOOLS,
-                    tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
-                )
+                if self.model in const.FILE_SEARCH_MODELS:
+                    new_assistant = await client.beta.assistants.create(
+                        name="Assistant",
+                        model=self.model,
+                        instructions=self.instructions,
+                        tools=TOOLS,
+                        tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
+                    )
+                else:
+                    new_assistant = await client.beta.assistants.create(
+                        name="Assistant",
+                        model=self.model,
+                        instructions=self.instructions,
+                        tools=[{"type": "function", "function": DXA_FUNCTION_DESC}],
+                    )
                 self.assistant_id = new_assistant.id
                 logger.info(f"Created new assistant with ID: {self.assistant_id}")
 
@@ -158,7 +177,7 @@ class Assistant:
             run = await client.beta.threads.runs.create(
                 thread_id=self.conversation_thread,
                 assistant_id=self.assistant_id,
-                model="gpt-4o",
+                model=self.model,
                 tool_choice="auto"
             )
 
@@ -314,53 +333,3 @@ class Assistant:
         except Exception as e:
             logger.error(f"Error uploading file to vector store: {str(e)}")
             raise
-
-    async def initialize_for_asst(self):
-        """
-        /asstコマンド用の初期化メソッド。
-        スレッドは作成せず、アシスタントとベクターストアの初期化のみを行う。
-        """
-        try:
-            # 1. ベクターストアの確認と設定
-            if not self.vector_store_id:
-                logger.debug("Checking existing vector stores...")
-                vector_stores = await client.beta.vector_stores.list()
-                if vector_stores.data:
-                    self.vector_store_id = vector_stores.data[0].id
-                    logger.info(f"Reusing existing vector store: {self.vector_store_id}")
-                else:
-                    vector_store = await client.beta.vector_stores.create()
-                    self.vector_store_id = vector_store.id
-                    logger.info(f"New vector store created with ID: {self.vector_store_id}")
-
-            # 2. アシスタントの設定
-            if not self.assistant_id:
-                env_assistant_id = env.ASSISTANT_ID
-                if env_assistant_id:
-                    try:
-                        existing_assistant = await client.beta.assistants.retrieve(env_assistant_id)
-                        self.assistant_id = existing_assistant.id
-                        logger.info(f"Using assistant from environment variable: {self.assistant_id}")
-                    except Exception as e:
-                        logger.warning(f"Failed to retrieve assistant from environment variable: {str(e)}")
-                        self.assistant_id = None
-
-                if not self.assistant_id:
-                    logger.info("Creating new assistant...")
-                    new_assistant = await client.beta.assistants.create(
-                        name="Assistant",
-                        model=self.model,
-                        instructions=self.instructions,
-                        tools=TOOLS,
-                        tool_resources={"file_search": {"vector_store_ids": [self.vector_store_id]}}
-                    )
-                    self.assistant_id = new_assistant.id
-                    logger.info(f"Created new assistant with ID: {self.assistant_id}")
-
-        except Exception as e:
-            logger.error(f"Error during initialization for /asst: {str(e)}")
-            raise
-
-
-# グローバルなアシスタントインスタンスを作成
-assistant = Assistant()

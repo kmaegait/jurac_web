@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from services.openai import assistant, client, TOOLS
+from services.openai import get_assistant, client, TOOLS
+from settings import const
 from utils.log import logger
 
 router = APIRouter()
@@ -8,12 +9,13 @@ router = APIRouter()
 async def initialize_assistant(request: dict):
     try:
         vector_store_id = request.get("vector_store_id")
-        model = "gpt-4o"
+        model = const.DEFAULT_MODEL_NAME
 
         if not vector_store_id:
             raise HTTPException(status_code=400, detail="Missing vector_store_id")
 
         # 既存のアシスタントをチック
+        assistant = await get_assistant(model)
         if assistant.assistant_id:
             try:
                 # 既存のアシスタントが有効か確認
@@ -49,6 +51,7 @@ async def initialize_assistant(request: dict):
         # グローバのassistantインスタンスを更新
         assistant.assistant_id = new_assistant.id
         assistant.vector_store_id = vector_store_id
+        assistant.conversation_thread = thread.id
 
         return {
             "assistant_id": new_assistant.id,
@@ -64,6 +67,7 @@ async def initialize_assistant(request: dict):
 @router.get("/check-assistant")
 async def check_assistant():
     try:
+        assistant = await get_assistant()
         if assistant.assistant_id:
             # 既存のアシスタントが有効かどうかを確認
             try:
